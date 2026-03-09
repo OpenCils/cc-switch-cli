@@ -1,0 +1,63 @@
+<svg width="1200" height="560" viewBox="0 0 1200 560" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">CC Switch CLI Preview</title>
+  <desc id="desc">A terminal-style preview for CC Switch CLI showing the installation selector screen.</desc>
+  <defs>
+    <linearGradient id="bg" x1="72" y1="28" x2="1122" y2="540" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#302C29"/>
+      <stop offset="1" stop-color="#262320"/>
+    </linearGradient>
+    <linearGradient id="scan" x1="0" y1="0" x2="1" y2="0">
+      <stop stop-color="#6FB36A" stop-opacity="0.20"/>
+      <stop offset="0.5" stop-color="#6FB36A" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#6FB36A" stop-opacity="0.20"/>
+    </linearGradient>
+    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#000000" flood-opacity="0.28"/>
+    </filter>
+    <pattern id="grid" width="18" height="18" patternUnits="userSpaceOnUse">
+      <path d="M18 0H0V18" stroke="#FFFFFF" stroke-opacity="0.04"/>
+    </pattern>
+  </defs>
+
+  <rect width="1200" height="560" fill="#201D1B"/>
+  <rect x="24" y="24" width="1152" height="512" rx="24" fill="url(#bg)" stroke="#4A443C" stroke-width="2"/>
+  <rect x="24" y="24" width="1152" height="512" rx="24" fill="url(#grid)"/>
+
+  <g opacity="0.9">
+    <circle cx="68" cy="56" r="7" fill="#F97316"/>
+    <circle cx="92" cy="56" r="7" fill="#D9C7A4" opacity="0.7"/>
+    <circle cx="116" cy="56" r="7" fill="#72C3D5" opacity="0.7"/>
+  </g>
+
+  <rect x="42" y="148" width="1116" height="74" rx="12" fill="url(#scan)"/>
+
+  <g font-family="'Consolas', 'Courier New', monospace" font-size="138" font-weight="700" letter-spacing="6">
+    <text x="49" y="170" fill="#6FB36A" fill-opacity="0.60">CC SWITCH</text>
+    <text x="56" y="184" fill="#72C3D5" fill-opacity="0.62">CC SWITCH</text>
+    <text x="42" y="156" fill="#D7C9AA" stroke="#191715" stroke-width="2" paint-order="stroke" filter="url(#softShadow)">CC SWITCH</text>
+  </g>
+
+  <g font-family="'Consolas', 'Courier New', monospace" font-size="18" fill="#BCA98A">
+    <text x="74" y="108">$ cc</text>
+    <text x="1076" y="108" text-anchor="end">Terminal model switcher</text>
+  </g>
+
+  <g font-family="'Consolas', 'Courier New', monospace" font-size="30">
+    <text x="68" y="326" fill="#F59E0B">› Claude Code <tspan fill="#D8CCB3">[Linux] gpt-5.4-xhigh</tspan></text>
+    <text x="104" y="366" fill="#F3E8C8">Codex <tspan fill="#BBAA8D">[Linux] gpt-5.4</tspan></text>
+    <text x="104" y="406" fill="#F3E8C8">Gemini <tspan fill="#BBAA8D">[Linux] (OAuth 默认)</tspan></text>
+  </g>
+
+  <g font-family="'Consolas', 'Courier New', monospace" font-size="19" fill="#D7C9AA">
+    <text x="60" y="484">↑↓ 移动</text>
+    <text x="204" y="484">Enter 进入</text>
+    <text x="378" y="484">Ctrl+C 退出</text>
+  </g>
+
+  <rect x="46" y="446" width="388" height="56" rx="10" fill="#1E1B19" fill-opacity="0.55" stroke="#4F483E"/>
+  <rect x="46" y="298" width="632" height="44" rx="8" fill="#1E1B19" fill-opacity="0.26" stroke="#4F483E" stroke-opacity="0.55"/>
+
+  <g font-family="'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="18" fill="#C6B79B">
+    <text x="1098" y="486" text-anchor="end">Preview aligned with the current TUI</text>
+  </g>
+</svg>

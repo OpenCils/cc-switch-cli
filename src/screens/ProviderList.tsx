@@ -5,14 +5,14 @@
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 
-import React, { useState, useEffect } from 'react'
+import React, { useEffect, useState } from 'react'
 import { Box, Text, useInput } from 'ink'
 import type { AppStore, Installation, ProviderConfig } from '../types.js'
 import { TOOLS, instKey } from '../types.js'
-import { setActive, removeProvider, saveStore } from '../store/local.js'
+import { removeProvider, saveStore, setActive, updateProvider } from '../store/local.js'
 import { writeConfig } from '../store/adapters/index.js'
 import { writeConfigWsl } from '../store/write-wsl.js'
-import { startAto, stopAto, getAtoStatus } from '../ato/index.js'
+import { getAtoStatus, isPortInUse, startAto } from '../ato/index.js'
 
 interface Props {
   installation: Installation
@@ -22,6 +22,17 @@ interface Props {
   onEdit: (provider: ProviderConfig) => void
   onBack: () => void
 }
+
+interface ApplyResult {
+  ok: boolean
+  error?: string
+  warning?: string
+  appliedProvider: ProviderConfig
+  nextStore: AppStore
+}
+
+const DEFAULT_ATO_PORT = 18653
+const MAX_PORT_SCAN = 30
 
 export function ProviderList({ installation, store, onStoreChange, onAdd, onEdit, onBack }: Props) {
   const storeKey = instKey(installation)
@@ -33,55 +44,146 @@ export function ProviderList({ installation, store, onStoreChange, onAdd, onEdit
   const [cursor, setCursor] = useState(0)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [feedback, setFeedback] = useState('')
+  const [activating, setActivating] = useState(false)
   const [atoStatus, setAtoStatus] = useState<{ running: boolean; port: number } | null>(null)
 
-  // 检测 ATO 状态
+  const activeProvider = providers.find(provider => provider.id === activeId) ?? null
+  const statusPort = activeProvider?.useAto ? (activeProvider.atoPort ?? DEFAULT_ATO_PORT) : null
+
   useEffect(() => {
     async function check() {
+      if (!statusPort) {
+        setAtoStatus(null)
+        return
+      }
+
       const status = await getAtoStatus(
-        5000,
+        statusPort,
         installation.env.type === 'wsl' ? 'wsl' : 'windows',
         installation.env.type === 'wsl' ? installation.env.distro : undefined,
       )
-      setAtoStatus(status.running ? status : null)
+      setAtoStatus(status.running ? { running: true, port: status.port } : null)
     }
-    check()
-  }, [installation.env])
+
+    void check()
+  }, [installation.env, statusPort])
 
   const onProvider = cursor > 0 && cursor <= providers.length
   const curProvider = onProvider ? providers[cursor - 1] : null
 
-  // 激活供应商
-  async function applyProvider(provider: ProviderConfig) {
-    const cfg = {
-      model: provider.model,
-      baseUrl: provider.useAto ? `http://127.0.0.1:${provider.atoPort ?? 5000}` : provider.baseUrl,
-      apiKey: provider.useAto ? '' : provider.apiKey,
+  function withUpdatedProvider(baseStore: AppStore, provider: ProviderConfig): AppStore {
+    return updateProvider(baseStore, storeKey, provider)
+  }
+
+  async function resolveAtoPort(provider: ProviderConfig): Promise<{ port: number; changed: boolean }> {
+    const desiredPort = provider.atoPort ?? DEFAULT_ATO_PORT
+    const env = installation.env.type === 'wsl' ? 'wsl' : 'windows'
+    const distro = installation.env.type === 'wsl' ? installation.env.distro : undefined
+    const status = await getAtoStatus(desiredPort, env, distro)
+
+    if (status.running && status.upstreamUrl === provider.atoUpstreamUrl) {
+      return { port: desiredPort, changed: false }
     }
 
-    // 如果是 ATO 供应商，尝试启动代理（失败也继续，可能已在运行）
-    if (provider.useAto && provider.atoUpstreamUrl && provider.atoApiKey) {
-      const result = await startAto({
-        port: provider.atoPort ?? 5000,
-        upstreamUrl: provider.atoUpstreamUrl,
-        upstreamKey: provider.atoApiKey,
-        distro: installation.env.type === 'wsl' ? installation.env.distro : undefined,
-      })
-      if (result.success) {
-        setAtoStatus({ running: true, port: provider.atoPort ?? 5000 })
-      } else if (result.error?.includes('already running')) {
-        setAtoStatus({ running: true, port: provider.atoPort ?? 5000 })
-      } else {
-        // 启动失败，但继续写入配置（用户可能手动启动了 ATO）
-        setFeedback(`警告: ATO 启动失败 (${result.error})，仍将写入配置`)
+    if (!(await isPortInUse(desiredPort))) {
+      return { port: desiredPort, changed: false }
+    }
+
+    for (let offset = 1; offset <= MAX_PORT_SCAN; offset++) {
+      const candidate = desiredPort + offset
+      if (!(await isPortInUse(candidate))) {
+        return { port: candidate, changed: true }
       }
     }
 
-    // 写入工具配置（无论 ATO 是否成功）
+    throw new Error(`ATO 端口冲突，${desiredPort}-${desiredPort + MAX_PORT_SCAN} 都不可用`)
+  }
+
+  async function applyProvider(provider: ProviderConfig): Promise<ApplyResult> {
+    let nextProvider = provider
+    let nextStore = store
+    let warning = ''
+    let resolvedPort = provider.atoPort ?? DEFAULT_ATO_PORT
+
+    if (provider.useAto) {
+      if (!provider.atoUpstreamUrl || !provider.atoApiKey) {
+        return { ok: false, error: 'ATO 上游地址或密钥缺失', appliedProvider: provider, nextStore }
+      }
+
+      const resolved = await resolveAtoPort(provider)
+      resolvedPort = resolved.port
+
+      if (resolved.changed) {
+        nextProvider = {
+          ...provider,
+          atoPort: resolved.port,
+        }
+        warning = `ATO 端口已从 ${provider.atoPort ?? DEFAULT_ATO_PORT} 自动切到 ${resolved.port}`
+      }
+
+      const result = await startAto({
+        port: resolvedPort,
+        upstreamUrl: nextProvider.atoUpstreamUrl ?? '',
+        upstreamKey: nextProvider.atoApiKey ?? '',
+        distro: installation.env.type === 'wsl' ? installation.env.distro : undefined,
+      })
+
+      if (result.success || result.error?.includes('already running')) {
+        setAtoStatus({ running: true, port: resolvedPort })
+        if (resolved.changed) {
+          nextStore = withUpdatedProvider(nextStore, nextProvider)
+        }
+      } else {
+        return {
+          ok: false,
+          error: `ATO 启动失败 (${result.error})`,
+          appliedProvider: nextProvider,
+          nextStore,
+        }
+      }
+    }
+
+    const cfg = {
+      model: nextProvider.model,
+      baseUrl: nextProvider.useAto ? `http://127.0.0.1:${resolvedPort}` : (nextProvider.baseUrl ?? ''),
+      apiKey: nextProvider.useAto ? (nextProvider.atoApiKey ?? '') : (nextProvider.apiKey ?? ''),
+    }
+
     if (installation.env.type === 'wsl') {
       writeConfigWsl(installation.tool, installation.configPath, installation.env.distro!, cfg)
     } else {
       writeConfig(installation.tool, installation.configPath, cfg)
+    }
+
+    return {
+      ok: true,
+      warning,
+      appliedProvider: nextProvider,
+      nextStore,
+    }
+  }
+
+  async function activateProvider(provider: ProviderConfig) {
+    if (activating) return
+
+    setActivating(true)
+    setFeedback(`正在激活: ${provider.name}`)
+
+    try {
+      const result = await applyProvider(provider)
+      if (!result.ok) {
+        setFeedback(`激活失败: ${result.error}`)
+        return
+      }
+
+      const next = setActive(result.nextStore, storeKey, result.appliedProvider.id)
+      saveStore(next)
+      onStoreChange(next)
+      setFeedback(result.warning ? `✓ 已激活: ${provider.name} (${result.warning})` : `✓ 已激活: ${provider.name}`)
+    } catch (err: any) {
+      setFeedback(`激活失败: ${err?.message || String(err)}`)
+    } finally {
+      setActivating(false)
     }
   }
 
@@ -98,7 +200,7 @@ export function ProviderList({ installation, store, onStoreChange, onAdd, onEdit
       return
     }
 
-    if (feedback) setFeedback('')
+    if (feedback && !activating) setFeedback('')
 
     if (k.upArrow)   return setCursor(i => (i - 1 + totalItems) % totalItems)
     if (k.downArrow) return setCursor(i => (i + 1) % totalItems)
@@ -110,11 +212,7 @@ export function ProviderList({ installation, store, onStoreChange, onAdd, onEdit
     }
 
     if ((ch === ' ' || ch === 's' || ch === 'a') && curProvider) {
-      const next = setActive(store, storeKey, curProvider.id)
-      saveStore(next)
-      onStoreChange(next)
-      applyProvider(curProvider)
-      setFeedback(`✓ 已激活: ${curProvider.name}`)
+      void activateProvider(curProvider)
       return
     }
 
@@ -160,6 +258,7 @@ export function ProviderList({ installation, store, onStoreChange, onAdd, onEdit
                   <Text bold={isCursor}>{p.name}</Text>
                   {p.useAto && <Text color="yellow" dimColor>[ATO]</Text>}
                   <Text dimColor>{p.model}</Text>
+                  {p.useAto && <Text dimColor>(:{p.atoPort ?? DEFAULT_ATO_PORT})</Text>}
                 </Box>
               )
             })}
@@ -170,11 +269,11 @@ export function ProviderList({ installation, store, onStoreChange, onAdd, onEdit
       {/* ---- 底部反馈/提示 ---- */}
       <Box marginTop={1}>
         {feedback ? (
-          <Text color="green" bold>{feedback}</Text>
+          <Text color={feedback.startsWith('激活失败') ? 'red' : 'green'} bold>{feedback}</Text>
         ) : confirmDelete ? (
           <Text color="red" bold>确认删除 "{curProvider?.name}"？再按 d / Esc 取消</Text>
         ) : (
-          <Text dimColor>↑↓ 移动   Enter 进入   s 激活   d 删除   Esc 返回</Text>
+          <Text dimColor>{activating ? '正在启动 ATO / 写入配置...' : '↑↓ 移动   Enter 进入   s 激活   d 删除   Esc 返回'}</Text>
         )}
       </Box>
     </Box>

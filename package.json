@@ -8,7 +8,8 @@
   },
   "scripts": {
     "start": "tsx src/app.tsx",
-    "dev": "tsx watch src/app.tsx"
+    "dev": "tsx watch src/app.tsx",
+    "build": "bun build src/app.tsx --compile --outfile cc"
   },
   "keywords": [],
   "author": "",

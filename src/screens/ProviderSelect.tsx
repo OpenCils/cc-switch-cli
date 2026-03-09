@@ -13,16 +13,17 @@ import { TOOLS, type Installation } from '../types.js'
 interface Props {
   installations: Installation[]
   onSelect: (inst: Installation) => void
-  onExit: () => void
+  onExitRequest: () => void
 }
 
-export function ProviderSelect({ installations, onSelect, onExit }: Props) {
+export function ProviderSelect({ installations, onSelect, onExitRequest }: Props) {
   const [cursor, setCursor] = useState(0)
   const items = installations
 
   useInput((ch, k) => {
     if (k.upArrow)   return setCursor(i => (i - 1 + items.length) % items.length)
     if (k.downArrow) return setCursor(i => (i + 1) % items.length)
+    if (ch === 'q' || k.escape) return onExitRequest()
     if (k.return && items.length > 0) return onSelect(items[cursor])
   })
 
@@ -63,7 +64,7 @@ export function ProviderSelect({ installations, onSelect, onExit }: Props) {
 
       {/* ---- 底部快捷键提示 ---- */}
       <Box marginTop={1}>
-        <Text dimColor>↑↓ 移动   Enter 进入   Ctrl+C 退出</Text>
+        <Text dimColor>↑↓ 移动   Enter 进入   q / Esc / Ctrl+C 退出</Text>
       </Box>
 
     </Box>

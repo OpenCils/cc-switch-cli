@@ -7,11 +7,11 @@
 
 import http from 'http'
 import { anthropicToOpenAIResponses } from './convert.js'
-import { openAIToAnthropic, openAIStreamToAnthropic, emitEvent } from './response.js'
+import { openAIToAnthropic } from './response.js'
 
 // ---------------------- 配置 ----------------------
 export interface AtoConfig {
-  port: number           // 本地监听端口，默认 5000
+  port: number           // 本地监听端口，默认 18653
   upstreamUrl: string    // 上游 OpenAI 兼容 API 地址
   upstreamKey: string    // 上游 API 密钥
 }
@@ -19,6 +19,8 @@ export interface AtoConfig {
 // ---------------------- 代理服务器 ----------------------
 export function createAtoServer(config: AtoConfig): http.Server {
   const server = http.createServer(async (req, res) => {
+    const url = (req.url || '').split('?')[0]
+
     // CORS
     res.setHeader('Access-Control-Allow-Origin', '*')
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
@@ -30,15 +32,18 @@ export function createAtoServer(config: AtoConfig): http.Server {
       return
     }
 
-    // Health check
-    if (req.method === 'GET' && req.url === '/health') {
+    if (req.method === 'GET' && (url === '/health' || url === '/ready')) {
       res.writeHead(200, { 'Content-Type': 'application/json' })
       res.end(JSON.stringify({ status: 'ok', upstream: config.upstreamUrl }))
       return
     }
 
-    // /v1/messages - 主入口
-    if (req.method === 'POST' && req.url === '/v1/messages') {
+    if (req.method === 'POST' && url === '/v1/messages/count_tokens') {
+      await handleCountTokens(req, res)
+      return
+    }
+
+    if (req.method === 'POST' && url === '/v1/messages') {
       try {
         await handleMessages(req, res, config)
       } catch (err: any) {
@@ -49,7 +54,6 @@ export function createAtoServer(config: AtoConfig): http.Server {
       return
     }
 
-    // 404
     res.writeHead(404, { 'Content-Type': 'application/json' })
     res.end(JSON.stringify({ error: { type: 'not_found', message: 'Not found' } }))
   })
@@ -63,7 +67,6 @@ async function handleMessages(
   res: http.ServerResponse,
   config: AtoConfig
 ): Promise<void> {
-  // 读取请求体
   const body = await readBody(req)
   let anthropicReq: any
   try {
@@ -74,13 +77,11 @@ async function handleMessages(
     return
   }
 
-  // 转换为 OpenAI 格式
   const openaiReq = anthropicToOpenAIResponses(anthropicReq)
   const isStream = openaiReq.stream === true
 
   console.log(`[ATO] ${anthropicReq.model} -> ${openaiReq.model}, stream=${isStream}`)
 
-  // 发送到上游
   const upstreamResp = await fetch(`${config.upstreamUrl}/responses`, {
     method: 'POST',
     headers: {
@@ -95,26 +96,149 @@ async function handleMessages(
     console.error(`[ATO] Upstream error: ${upstreamResp.status}`, errorText)
     res.writeHead(upstreamResp.status, { 'Content-Type': 'application/json' })
     res.end(JSON.stringify({
-      error: { type: 'upstream_error', message: errorText, status: upstreamResp.status }
+      error: { type: 'upstream_error', message: errorText, status: upstreamResp.status },
     }))
     return
   }
 
   if (isStream) {
-    // 流式响应
     res.writeHead(200, {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
       'Connection': 'keep-alive',
     })
     await handleStreamResponse(upstreamResp, res)
-  } else {
-    // 非流式响应
-    const openaiResp = await upstreamResp.json()
-    const anthropicResp = openAIToAnthropic(openaiResp)
-    res.writeHead(200, { 'Content-Type': 'application/json' })
-    res.end(JSON.stringify(anthropicResp))
+    return
   }
+
+  const openaiResp = await upstreamResp.json()
+  const anthropicResp = openAIToAnthropic(openaiResp)
+  res.writeHead(200, { 'Content-Type': 'application/json' })
+  res.end(JSON.stringify(anthropicResp))
+}
+
+async function handleCountTokens(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+): Promise<void> {
+  try {
+    const body = await readBody(req)
+    const anthropicReq = JSON.parse(body || '{}')
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({ input_tokens: estimateInputTokens(anthropicReq) }))
+  } catch {
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({ input_tokens: 0 }))
+  }
+}
+
+// ---------------------- 流式转换：OpenAI Responses → Anthropic SSE ----------------------
+// 与 entry.mjs 保持同构：延迟发 tool_use 块
+async function* openAIResponsesStreamToAnthropic(upstreamBody: ReadableStream<Uint8Array>) {
+  const reader = upstreamBody.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  const toolCalls: any[] = []
+  let lastText = ''
+  let textStarted = false
+  let blockIndex = 0
+
+  const sse = (eventType: string, data: object) =>
+    `event: ${eventType}\ndata: ${JSON.stringify(data)}\n\n`
+
+  yield sse('message_start', {
+    type: 'message_start',
+    message: {
+      id: 'msg_stream', type: 'message', role: 'assistant',
+      content: [], model: 'unknown', stop_reason: null,
+      usage: { input_tokens: 0, output_tokens: 0 },
+    },
+  })
+  yield sse('ping', { type: 'ping' })
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    const lines = buffer.split('\n')
+    buffer = lines.pop() ?? ''
+
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue
+      const dataStr = line.slice(6).trim()
+      if (dataStr === '[DONE]') continue
+
+      let event: any
+      try { event = JSON.parse(dataStr) } catch { continue }
+      const type = event.type ?? ''
+
+      if (type === 'response.output_text.delta') {
+        const delta = event.delta ?? ''
+        if (!textStarted) {
+          textStarted = true
+          yield sse('content_block_start', {
+            type: 'content_block_start', index: blockIndex,
+            content_block: { type: 'text', text: '' },
+          })
+        }
+        yield sse('content_block_delta', {
+          type: 'content_block_delta', index: blockIndex,
+          delta: { type: 'text_delta', text: delta },
+        })
+        lastText += delta
+
+      } else if (type === 'response.output_item.done') {
+        const item = event.item ?? {}
+        if (item.type === 'function_call') toolCalls.push(item)
+
+      } else if (type === 'response.completed') {
+        const output = event.response?.output ?? []
+        if (!lastText) {
+          for (const item of output) {
+            if (item.type === 'message') {
+              lastText += (item.content ?? [])
+                .filter((p: any) => p.type === 'output_text' || p.type === 'text')
+                .map((p: any) => p.text || '')
+                .join('')
+            }
+          }
+        }
+        if (!toolCalls.length) {
+          for (const item of output) {
+            if (item.type === 'function_call') toolCalls.push(item)
+          }
+        }
+      }
+    }
+  }
+
+  if (textStarted) {
+    yield sse('content_block_stop', { type: 'content_block_stop', index: blockIndex })
+    blockIndex++
+  }
+
+  for (let i = 0; i < toolCalls.length; i++) {
+    const tc = toolCalls[i]
+    const idx = blockIndex + i
+    const argsStr = typeof tc.arguments === 'string' ? tc.arguments : JSON.stringify(tc.arguments ?? {})
+    yield sse('content_block_start', {
+      type: 'content_block_start', index: idx,
+      content_block: { type: 'tool_use', id: tc.call_id || tc.id || `tool_${idx}`, name: tc.name || '', input: {} },
+    })
+    yield sse('content_block_delta', {
+      type: 'content_block_delta', index: idx,
+      delta: { type: 'input_json_delta', partial_json: argsStr },
+    })
+    yield sse('content_block_stop', { type: 'content_block_stop', index: idx })
+  }
+
+  const stopReason = toolCalls.length > 0 ? 'tool_use' : 'end_turn'
+  yield sse('message_delta', {
+    type: 'message_delta',
+    delta: { stop_reason: stopReason, stop_sequence: null },
+    usage: { output_tokens: 0 },
+  })
+  yield sse('message_stop', { type: 'message_stop' })
 }
 
 // ---------------------- 流式处理 ----------------------
@@ -122,35 +246,19 @@ async function handleStreamResponse(
   upstreamResp: Response,
   res: http.ServerResponse
 ): Promise<void> {
-  const reader = upstreamResp.body?.getReader()
-  if (!reader) {
+  if (!upstreamResp.body) {
     res.end()
     return
   }
 
-  const decoder = new TextDecoder()
-  const chunks: string[] = []
-
   try {
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-
-      const chunk = decoder.decode(value, { stream: true })
-      chunks.push(chunk)
-
-      // 实时转换并转发
-      // 注意：这里简化处理，实际应该边读边转
+    for await (const chunk of openAIResponsesStreamToAnthropic(upstreamResp.body)) {
       res.write(chunk)
     }
-
-    // 完成 SSE 流
-    res.write('event: message_stop\ndata: {"type":"message_stop"}\n\n')
-    res.end()
   } catch (err: any) {
     console.error('[ATO] Stream error:', err.message)
-    res.end()
   }
+  res.end()
 }
 
 // ---------------------- 辅助函数 ----------------------
@@ -161,6 +269,25 @@ function readBody(req: http.IncomingMessage): Promise<string> {
     req.on('end', () => resolve(Buffer.concat(chunks).toString('utf-8')))
     req.on('error', reject)
   })
+}
+
+function estimateInputTokens(payload: any): number {
+  let totalChars = flattenTokenText(payload?.system).length
+
+  for (const msg of payload?.messages ?? []) {
+    totalChars += flattenTokenText(msg?.content).length
+  }
+
+  return Math.max(1, Math.floor(totalChars / 4))
+}
+
+function flattenTokenText(content: unknown): string {
+  if (typeof content === 'string') return content
+  if (!Array.isArray(content)) return ''
+  return content
+    .filter((block: any) => block?.type === 'text')
+    .map((block: any) => block?.text || '')
+    .join('')
 }
 
 // ---------------------- 进程管理 ----------------------
