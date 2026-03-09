@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 /**
- * ATO 代理进程入口
- * 通过 detached spawn 启动，独立于父进程运行
+ * [INPUT]: 依赖 Claude Code 的 Anthropic 请求、上游 OpenAI 兼容接口配置
+ * [OUTPUT]: 对外提供独立 ATO 代理进程，兼容 /health /ready /v1/messages /v1/messages/count_tokens
+ * [POS]: ATO 模块的独立入口，供 manager.ts 在 Windows / WSL 启动，需与 server.ts 保持协议同构
+ * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 
 import http from 'http'
@@ -37,6 +39,10 @@ function resolveModel(model) {
   return mapping[model] || model
 }
 
+function isSchemaObject(value) {
+  return !!value && typeof value === 'object' && !Array.isArray(value)
+}
+
 function flattenTextBlocks(content) {
   if (typeof content === 'string') return content
   if (!Array.isArray(content)) return ''
@@ -44,6 +50,46 @@ function flattenTextBlocks(content) {
     .filter(block => block?.type === 'text')
     .map(block => block.text || '')
     .join('')
+}
+
+function normalizeSchemaNode(schema, forceObject = false) {
+  if (!isSchemaObject(schema)) {
+    return forceObject ? { type: 'object', properties: {} } : {}
+  }
+
+  const normalized = { ...schema }
+
+  if (forceObject || normalized.type === 'object' || normalized.properties !== undefined) {
+    const rawProperties = isSchemaObject(normalized.properties) ? normalized.properties : {}
+    normalized.type = 'object'
+    normalized.properties = Object.fromEntries(
+      Object.entries(rawProperties).map(([key, value]) => [key, normalizeSchemaNode(value)]),
+    )
+  }
+
+  if (normalized.type === 'array' && normalized.items !== undefined) {
+    normalized.items = normalizeSchemaNode(normalized.items)
+  }
+
+  for (const key of ['anyOf', 'oneOf', 'allOf']) {
+    if (Array.isArray(normalized[key])) {
+      normalized[key] = normalized[key].map(item => normalizeSchemaNode(item))
+    }
+  }
+
+  if (isSchemaObject(normalized.additionalProperties)) {
+    normalized.additionalProperties = normalizeSchemaNode(normalized.additionalProperties)
+  }
+
+  if (isSchemaObject(normalized.not)) {
+    normalized.not = normalizeSchemaNode(normalized.not)
+  }
+
+  return normalized
+}
+
+function normalizeToolSchema(schema) {
+  return normalizeSchemaNode(schema, true)
 }
 
 function anthropicToOpenAI(req) {
@@ -134,7 +180,7 @@ function anthropicToOpenAI(req) {
       type: 'function',
       name: tool.name,
       description: tool.description || '',
-      parameters: tool.input_schema || { type: 'object', properties: {} },
+      parameters: normalizeToolSchema(tool.input_schema),
     }))
   }
 

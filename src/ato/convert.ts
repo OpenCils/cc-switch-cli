@@ -75,6 +75,10 @@ function resolveModel(model: string): string {
   return mapping[model] || model
 }
 
+function isSchemaObject(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value)
+}
+
 function flattenTextBlocks(content: unknown): string {
   if (typeof content === 'string') return content
   if (!Array.isArray(content)) return ''
@@ -84,9 +88,44 @@ function flattenTextBlocks(content: unknown): string {
     .join('')
 }
 
+function normalizeSchemaNode(schema: unknown, forceObject = false): Record<string, unknown> {
+  if (!isSchemaObject(schema)) {
+    return forceObject ? { type: 'object', properties: {} } : {}
+  }
+
+  const normalized: Record<string, unknown> = { ...schema }
+
+  if (forceObject || normalized.type === 'object' || normalized.properties !== undefined) {
+    const rawProperties = isSchemaObject(normalized.properties) ? normalized.properties : {}
+    normalized.type = 'object'
+    normalized.properties = Object.fromEntries(
+      Object.entries(rawProperties).map(([key, value]) => [key, normalizeSchemaNode(value)]),
+    )
+  }
+
+  if (normalized.type === 'array' && normalized.items !== undefined) {
+    normalized.items = normalizeSchemaNode(normalized.items)
+  }
+
+  for (const key of ['anyOf', 'oneOf', 'allOf'] as const) {
+    if (Array.isArray(normalized[key])) {
+      normalized[key] = normalized[key].map(item => normalizeSchemaNode(item))
+    }
+  }
+
+  if (isSchemaObject(normalized.additionalProperties)) {
+    normalized.additionalProperties = normalizeSchemaNode(normalized.additionalProperties)
+  }
+
+  if (isSchemaObject(normalized.not)) {
+    normalized.not = normalizeSchemaNode(normalized.not)
+  }
+
+  return normalized
+}
+
 function normalizeToolSchema(schema: unknown): Record<string, unknown> {
-  if (!schema || typeof schema !== 'object') return { type: 'object', properties: {} }
-  return schema as Record<string, unknown>
+  return normalizeSchemaNode(schema, true)
 }
 
 function imageBlockToDataUrl(block: AnthropicContentBlock): string | null {
@@ -218,3 +257,4 @@ export function anthropicToOpenAIResponses(req: AnthropicRequest): OpenAIRespons
 
   return result
 }
+

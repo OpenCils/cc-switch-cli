@@ -34,7 +34,15 @@ jobs:
         shell: bash
         run: |
           VER="${GITHUB_REF_NAME#v}"
-          echo "export const VERSION = '$VER'" > src/version.ts
+          node - <<'NODE'
+          const fs = require('node:fs')
+          const path = 'src/version.ts'
+          const ver = process.env.VER
+          const text = fs.readFileSync(path, 'utf8')
+          const next = text.replace(/export const VERSION = '[^']+'/u, `export const VERSION = '${ver}'`)
+          if (text === next) throw new Error('VERSION anchor not found in src/version.ts')
+          fs.writeFileSync(path, next, 'utf8')
+          NODE
 
       - name: Stub react-devtools-core (not available in standalone binary)
         shell: bash
