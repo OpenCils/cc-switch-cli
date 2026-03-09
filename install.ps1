@@ -1,5 +1,5 @@
-# cc-switch-cli Windows 安装脚本
-# 用法: irm https://raw.githubusercontent.com/OWNER/cc-switch-cli/main/install.ps1 | iex
+# cc-switch-cli installer for Windows
+# Usage: irm https://raw.githubusercontent.com/OpenCils/cc-switch-cli/main/install.ps1 | iex
 
 $ErrorActionPreference = "Stop"
 
@@ -8,10 +8,10 @@ $BinaryName = "cc.exe"
 $AssetName = "cc-windows-x64.exe"
 $InstallDir = "$env:USERPROFILE\.local\bin"
 
-# ---------------------- 下载二进制 ----------------------
+# ---------------------- Download binary ----------------------
 $DownloadUrl = "https://github.com/$Repo/releases/latest/download/$AssetName"
 
-Write-Host "⬇️  下载 $AssetName ..." -ForegroundColor Cyan
+Write-Host "Downloading $AssetName ..." -ForegroundColor Cyan
 
 if (-not (Test-Path $InstallDir)) {
     New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
@@ -20,7 +20,7 @@ if (-not (Test-Path $InstallDir)) {
 $OutPath = Join-Path $InstallDir $BinaryName
 Invoke-RestMethod -Uri $DownloadUrl -OutFile $OutPath
 
-# ---------------------- 配置 PATH ----------------------
+# ---------------------- Configure PATH ----------------------
 $CurrentPath = [Environment]::GetEnvironmentVariable("Path", "User")
 
 if ($CurrentPath -notlike "*$InstallDir*") {
@@ -30,9 +30,9 @@ if ($CurrentPath -notlike "*$InstallDir*") {
         "User"
     )
     $env:Path = "$InstallDir;$env:Path"
-    Write-Host "✅ 已将 $InstallDir 添加到用户 PATH" -ForegroundColor Green
+    Write-Host "Added $InstallDir to user PATH" -ForegroundColor Green
 }
 
 Write-Host ""
-Write-Host "✅ cc-switch-cli 安装成功！" -ForegroundColor Green
-Write-Host "   重新打开终端后输入 'cc' 启动" -ForegroundColor Yellow
+Write-Host "cc-switch-cli installed successfully!" -ForegroundColor Green
+Write-Host "Reopen your terminal and type 'cc' to launch." -ForegroundColor Yellow
