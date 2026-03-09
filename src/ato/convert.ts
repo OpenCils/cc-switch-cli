@@ -5,7 +5,8 @@
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 
-const runtime = await import(new URL('./runtime.mjs', import.meta.url).href)
+// @ts-ignore runtime.mjs 是给 entry.mjs 和 Bun 单文件编译共用的原生 ESM 运行时
+import { anthropicToOpenAIResponses as anthropicToOpenAIResponsesImpl } from './runtime.mjs'
 
 // ---------------------- 类型定义 ----------------------
 interface AnthropicMessage {
@@ -66,5 +67,5 @@ type OpenAIPart =
 
 // ---------------------- 核心转换 ----------------------
 export function anthropicToOpenAIResponses(req: AnthropicRequest): OpenAIResponsesRequest {
-  return runtime.anthropicToOpenAIResponses(req) as OpenAIResponsesRequest
+  return anthropicToOpenAIResponsesImpl(req) as OpenAIResponsesRequest
 }

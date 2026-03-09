@@ -5,11 +5,12 @@
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 
-const runtime = await import(new URL('./runtime.mjs', import.meta.url).href)
+// @ts-ignore runtime.mjs 是给 entry.mjs 和 Bun 单文件编译共用的原生 ESM 运行时
+import { emitEvent as emitEventImpl, openAIToAnthropic as openAIToAnthropicImpl } from './runtime.mjs'
 
 // ---------------------- SSE 辅助 ----------------------
 export function emitEvent(event: string, data: unknown): string {
-  return runtime.emitEvent(event, data) as string
+  return emitEventImpl(event, data) as string
 }
 
 function parseSSEEvents(chunks: string[]): [string, unknown][] {
@@ -121,7 +122,7 @@ function extractToolCalls(items: OpenAIOutputItem[]): { id: string; name: string
 }
 
 export function openAIToAnthropic(res: OpenAIResponse): AnthropicResponse {
-  return runtime.openAIToAnthropic(res) as AnthropicResponse
+  return openAIToAnthropicImpl(res) as AnthropicResponse
 }
 
 // ---------------------- 流式响应转换 ----------------------

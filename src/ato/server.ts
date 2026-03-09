@@ -7,7 +7,8 @@
 
 import type http from 'http'
 
-const runtime = await import(new URL('./runtime.mjs', import.meta.url).href)
+// @ts-ignore runtime.mjs 是给 entry.mjs 和 Bun 单文件编译共用的原生 ESM 运行时
+import { checkAtoRunning as checkAtoRunningImpl, createAtoServer as createAtoServerImpl, isPortInUse as isPortInUseImpl, startAtoProcess as startAtoProcessImpl } from './runtime.mjs'
 
 // ---------------------- 配置 ----------------------
 export interface AtoConfig {
@@ -18,17 +19,17 @@ export interface AtoConfig {
 
 // ---------------------- 公开 API ----------------------
 export function createAtoServer(config: AtoConfig): http.Server {
-  return runtime.createAtoServer(config) as http.Server
+  return createAtoServerImpl(config) as http.Server
 }
 
 export function startAtoProcess(config: AtoConfig): Promise<number> {
-  return runtime.startAtoProcess(config) as Promise<number>
+  return startAtoProcessImpl(config) as Promise<number>
 }
 
 export function isPortInUse(port: number): Promise<boolean> {
-  return runtime.isPortInUse(port) as Promise<boolean>
+  return isPortInUseImpl(port) as Promise<boolean>
 }
 
 export function checkAtoRunning(port: number): Promise<boolean> {
-  return runtime.checkAtoRunning(port) as Promise<boolean>
+  return checkAtoRunningImpl(port) as Promise<boolean>
 }
