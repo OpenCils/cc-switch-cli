@@ -32,17 +32,10 @@ jobs:
 
       - name: Inject version into src/version.ts
         shell: bash
+        env:
+          VER: ${{ github.ref_name }}
         run: |
-          export VER="${GITHUB_REF_NAME#v}"
-          node - <<'NODE'
-          const fs = require('node:fs')
-          const path = 'src/version.ts'
-          const ver = process.env.VER
-          const text = fs.readFileSync(path, 'utf8')
-          const next = text.replace(/export const VERSION = '[^']+'/u, `export const VERSION = '${ver}'`)
-          if (text === next) throw new Error('VERSION anchor not found in src/version.ts')
-          fs.writeFileSync(path, next, 'utf8')
-          NODE
+          node -e "const fs=require('node:fs'); const path='src/version.ts'; const ver=(process.env.VER || '').replace(/^v/, ''); if(!ver) throw new Error('VER missing'); const text=fs.readFileSync(path,'utf8'); const pattern=/export const VERSION = '[^']+'/u; if(!pattern.test(text)) throw new Error('VERSION anchor not found in src/version.ts'); const next=text.replace(pattern, \"export const VERSION = '\" + ver + \"'\"); fs.writeFileSync(path,next,'utf8')"
 
       - name: Stub react-devtools-core (not available in standalone binary)
         shell: bash

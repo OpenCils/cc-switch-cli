@@ -1,6 +1,6 @@
 {
   "name": "cc-switch-cli",
-  "version": "1.2.5",
+  "version": "1.2.6",
   "description": "TUI for switching models in Claude Code, Codex, Gemini, and OpenClaw",
   "type": "module",
   "bin": {

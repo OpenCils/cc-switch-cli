@@ -83,6 +83,10 @@ bin/
 - `tsx` — TypeScript 直接运行
 
 ## 变更日志
+- v1.2.6  发布修复：GitHub Actions 改为稳定注入 tag 版本，避免产物出现 当前版本: vundefined
+- v1.2.5  修复尝试：补上版本归一化与发布注入，但 Actions 中的 heredoc 脚本失败，未生成有效产物
+- v1.2.4  体验修复：首屏显示当前版本，加入一键自更新 u，并清理升级后仍提示更新的缓存误判
+- v1.2.3  ATO 修复：递归规范化 tool schema，补齐 object/properties，避免上游 400 invalid_function_parameters
 - v2.0.0  架构重构：多环境检测（Windows + WSL），工具配置适配器，直接编辑安装实例配置
 - v1.0.0  初始实现：四提供商选择、模型增删改激活、ASCII banner
 
