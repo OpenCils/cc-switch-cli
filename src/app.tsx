@@ -1,18 +1,21 @@
 /**
- * [INPUT]: 依赖所有 screens 和 store，依赖 ink 的 render/useApp
+ * [INPUT]: 依赖所有 screens、store 与 ato 生命周期管理，依赖 ink 的 render/useApp/useInput
  * [OUTPUT]: App 根组件 + 程序入口
- * [POS]: src/ 的顶层路由控制器，三屏状态机（select → provider-list → provider-form）
+ * [POS]: src/ 的顶层路由控制器，负责三屏导航与退出前 ATO 保留/关闭确认
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 
 import React, { useState } from 'react'
-import { render, useApp } from 'ink'
+import { render, useApp, useInput } from 'ink'
 import type { AppStore, Installation, ProviderConfig } from './types.js'
+import { instKey } from './types.js'
 import { detectInstallations } from './store/detect.js'
 import { loadStore } from './store/local.js'
+import { getAtoStatus, stopAto } from './ato/index.js'
 import { ProviderSelect } from './screens/ProviderSelect.js'
 import { ProviderList } from './screens/ProviderList.js'
 import { ProviderForm } from './screens/ProviderForm.js'
+import { ExitConfirm } from './screens/ExitConfirm.js'
 
 // ---------------------- 路由类型 ----------------------
 type Screen =
@@ -20,19 +23,125 @@ type Screen =
   | { name: 'provider-list'; installation: Installation }
   | { name: 'provider-form'; installation: Installation; editing: ProviderConfig | null }
 
+interface AtoExitTarget {
+  env: 'windows' | 'wsl'
+  label: string
+  port: number
+  distro?: string
+}
+
+interface ExitDialogState {
+  mode: 'confirm' | 'stopping' | 'error'
+  message?: string
+  targets: AtoExitTarget[]
+}
+
+function collectAtoTargets(store: AppStore, installations: Installation[]): AtoExitTarget[] {
+  const installationMap = new Map(installations.map(inst => [instKey(inst), inst]))
+  const seen = new Set<string>()
+  const targets: AtoExitTarget[] = []
+
+  for (const [storeKey, providers] of Object.entries(store.providers)) {
+    const installation = installationMap.get(storeKey)
+    if (!installation) continue
+    if (installation.env.type !== 'windows' && installation.env.type !== 'wsl') continue
+
+    for (const provider of providers) {
+      if (!provider.useAto) continue
+
+      const port = provider.atoPort ?? 18653
+      const env = installation.env.type === 'wsl' ? 'wsl' : 'windows'
+      const signature = `${env}:${installation.env.distro ?? ''}:${port}`
+      if (seen.has(signature)) continue
+      seen.add(signature)
+
+      targets.push({
+        env,
+        label: `${installation.env.label}:${port}`,
+        port,
+        distro: installation.env.distro,
+      })
+    }
+  }
+
+  return targets.sort((a, b) => a.label.localeCompare(b.label))
+}
+
 // ---------------------- 根组件 ----------------------
 function App() {
   const { exit } = useApp()
   const [installations] = useState<Installation[]>(() => detectInstallations())
   const [store, setStore] = useState<AppStore>(loadStore)
   const [screen, setScreen] = useState<Screen>({ name: 'select' })
+  const [exitDialog, setExitDialog] = useState<ExitDialogState | null>(null)
+
+  function requestExit() {
+    if (exitDialog) return
+    setExitDialog({
+      mode: 'confirm',
+      targets: collectAtoTargets(store, installations),
+    })
+  }
+
+  async function stopAtoAndExit() {
+    if (!exitDialog || exitDialog.mode === 'stopping') return
+
+    setExitDialog({
+      ...exitDialog,
+      mode: 'stopping',
+      message: exitDialog.targets.length === 0
+        ? '未检测到 ATO 配置，正在退出...'
+        : `正在关闭 ${exitDialog.targets.length} 个 ATO...`,
+    })
+
+    const results = await Promise.all(exitDialog.targets.map(async target => {
+      const status = await getAtoStatus(target.port, target.env, target.distro)
+      if (!status.running) {
+        return { target, ok: true }
+      }
+
+      const stopped = await stopAto(target.port, target.env, target.distro)
+      return { target, ok: stopped }
+    }))
+
+    const failed = results.filter(result => !result.ok).map(result => result.target.label)
+    if (failed.length > 0) {
+      setExitDialog({
+        ...exitDialog,
+        mode: 'error',
+        message: `关闭失败: ${failed.join('，')}`,
+      })
+      return
+    }
+
+    exit()
+  }
+
+  useInput((input, key) => {
+    if (key.ctrl && input === 'c' && !exitDialog) {
+      requestExit()
+    }
+  })
+
+  if (exitDialog) {
+    return (
+      <ExitConfirm
+        message={exitDialog.message}
+        mode={exitDialog.mode}
+        targets={exitDialog.targets}
+        onCancel={() => setExitDialog(null)}
+        onExitKeepAto={exit}
+        onExitStopAto={() => void stopAtoAndExit()}
+      />
+    )
+  }
 
   if (screen.name === 'select') {
     return (
       <ProviderSelect
         installations={installations}
         onSelect={inst => setScreen({ name: 'provider-list', installation: inst })}
-        onExit={exit}
+        onExitRequest={requestExit}
       />
     )
   }
@@ -51,7 +160,6 @@ function App() {
     )
   }
 
-  // provider-form
   const { installation, editing } = screen
   return (
     <ProviderForm
@@ -65,4 +173,4 @@ function App() {
 }
 
 // ---------------------- 启动 ----------------------
-render(<App />)
+render(<App />, { exitOnCtrlC: false })

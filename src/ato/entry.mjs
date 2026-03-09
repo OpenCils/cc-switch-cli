@@ -9,13 +9,13 @@ import { parseArgs } from 'util'
 
 const { values } = parseArgs({
   options: {
-    port: { type: 'string', short: 'p', default: '5000' },
+    port: { type: 'string', short: 'p', default: '18653' },
     upstream: { type: 'string', short: 'u', default: '' },
     key: { type: 'string', short: 'k', default: '' },
   },
 })
 
-const PORT = parseInt(values.port || '5000', 10)
+const PORT = parseInt(values.port || '18653', 10)
 const UPSTREAM_URL = values.upstream || process.env.ATO_UPSTREAM_URL || ''
 const UPSTREAM_KEY = values.key || process.env.ATO_UPSTREAM_KEY || ''
 
@@ -37,17 +37,19 @@ function resolveModel(model) {
   return mapping[model] || model
 }
 
+function flattenTextBlocks(content) {
+  if (typeof content === 'string') return content
+  if (!Array.isArray(content)) return ''
+  return content
+    .filter(block => block?.type === 'text')
+    .map(block => block.text || '')
+    .join('')
+}
+
 function anthropicToOpenAI(req) {
   const input = []
+  const instructions = flattenTextBlocks(req.system)
 
-  // System
-  let instructions = ''
-  if (typeof req.system === 'string') instructions = req.system
-  else if (Array.isArray(req.system)) {
-    instructions = req.system.filter(b => b?.type === 'text').map(b => b.text || '').join('')
-  }
-
-  // Messages
   for (const msg of req.messages || []) {
     const role = msg.role || 'user'
     const content = msg.content
@@ -63,35 +65,33 @@ function anthropicToOpenAI(req) {
 
     if (!Array.isArray(content)) continue
 
-    // Assistant
     if (role === 'assistant') {
-      const textBlocks = content.filter(b => b.type === 'text')
-      const toolUses = content.filter(b => b.type === 'tool_use')
+      const textBlocks = content.filter(block => block.type === 'text')
+      const toolUses = content.filter(block => block.type === 'tool_use')
 
       if (textBlocks.length > 0) {
         input.push({
           type: 'message',
           role: 'assistant',
-          content: textBlocks.map(b => ({ type: 'output_text', text: b.text || ' ' })),
+          content: textBlocks.map(block => ({ type: 'output_text', text: block.text || ' ' })),
         })
       }
 
       for (let i = 0; i < toolUses.length; i++) {
-        const tu = toolUses[i]
+        const toolUse = toolUses[i]
         input.push({
           type: 'function_call',
-          call_id: tu.id || `tool_${i}`,
-          name: tu.name || '',
-          arguments: JSON.stringify(tu.input || {}),
+          call_id: toolUse.id || `tool_${i}`,
+          name: toolUse.name || '',
+          arguments: JSON.stringify(toolUse.input || {}),
         })
       }
       continue
     }
 
-    // User
     if (role === 'user') {
       const parts = []
-      const toolResults = content.filter(b => b.type === 'tool_result')
+      const toolResults = content.filter(block => block.type === 'tool_result')
 
       for (const block of content) {
         if (block.type === 'text') {
@@ -108,12 +108,11 @@ function anthropicToOpenAI(req) {
         input.push({ type: 'message', role: 'user', content: parts })
       }
 
-      for (const tr of toolResults) {
-        const outputText = typeof tr.content === 'string' ? tr.content : ''
+      for (const toolResult of toolResults) {
         input.push({
           type: 'function_call_output',
-          call_id: tr.tool_use_id || '',
-          output: outputText || ' ',
+          call_id: toolResult.tool_use_id || '',
+          output: flattenTextBlocks(toolResult.content) || ' ',
         })
       }
     }
@@ -131,11 +130,11 @@ function anthropicToOpenAI(req) {
   if (req.top_p !== undefined) result.top_p = req.top_p
 
   if (req.tools) {
-    result.tools = req.tools.map(t => ({
+    result.tools = req.tools.map(tool => ({
       type: 'function',
-      name: t.name,
-      description: t.description || '',
-      parameters: t.input_schema || { type: 'object', properties: {} },
+      name: tool.name,
+      description: tool.description || '',
+      parameters: tool.input_schema || { type: 'object', properties: {} },
     }))
   }
 
@@ -145,26 +144,26 @@ function anthropicToOpenAI(req) {
 function openAIToAnthropic(res) {
   const output = res.output || res.response?.output || []
   const text = output
-    .filter(i => i.type === 'message')
-    .flatMap(i => i.content || [])
-    .filter(p => p.type === 'output_text' || p.type === 'text')
-    .map(p => p.text || '')
+    .filter(item => item.type === 'message')
+    .flatMap(item => item.content || [])
+    .filter(part => part.type === 'output_text' || part.type === 'text')
+    .map(part => part.text || '')
     .join('')
 
   const toolCalls = output
-    .filter(i => i.type === 'function_call' || i.type === 'tool_call')
-    .map(i => ({
-      id: i.call_id || i.id || 'tool_unknown',
-      name: i.name || '',
-      arguments: typeof i.arguments === 'string' ? i.arguments : JSON.stringify(i.input || {}),
+    .filter(item => item.type === 'function_call' || item.type === 'tool_call')
+    .map(item => ({
+      id: item.call_id || item.id || 'tool_unknown',
+      name: item.name || '',
+      arguments: typeof item.arguments === 'string' ? item.arguments : JSON.stringify(item.input || {}),
     }))
 
   const content = []
   if (text) content.push({ type: 'text', text })
-  for (const tc of toolCalls) {
+  for (const toolCall of toolCalls) {
     let input = {}
-    try { input = JSON.parse(tc.arguments) } catch {}
-    content.push({ type: 'tool_use', id: tc.id, name: tc.name, input })
+    try { input = JSON.parse(toolCall.arguments) } catch {}
+    content.push({ type: 'tool_use', id: toolCall.id, name: toolCall.name, input })
   }
   if (content.length === 0) content.push({ type: 'text', text: '' })
 
@@ -184,11 +183,135 @@ function openAIToAnthropic(res) {
   }
 }
 
+// ---------------------- SSE 辅助 ----------------------
+function sseEvent(eventType, data) {
+  return `event: ${eventType}\ndata: ${JSON.stringify(data)}\n\n`
+}
+
+// ---------------------- 流式转换：OpenAI Responses → Anthropic SSE ----------------------
+// 移植自 Python async_stream.py：延迟发 tool_use 块（等 arguments 完整拼接后统一发出）
+async function* openAIResponsesStreamToAnthropic(upstreamBody) {
+  const reader = upstreamBody.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  const toolCalls = []
+  let lastText = ''
+  let textStarted = false
+  let blockIndex = 0
+
+  // --- 握手帧 ---
+  yield sseEvent('message_start', {
+    type: 'message_start',
+    message: {
+      id: 'msg_stream', type: 'message', role: 'assistant',
+      content: [], model: 'unknown', stop_reason: null,
+      usage: { input_tokens: 0, output_tokens: 0 },
+    },
+  })
+  yield sseEvent('ping', { type: 'ping' })
+
+  // --- 逐行解析上游 SSE ---
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    const lines = buffer.split('\n')
+    buffer = lines.pop() ?? ''
+
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue
+      const dataStr = line.slice(6).trim()
+      if (dataStr === '[DONE]') continue
+
+      let event
+      try { event = JSON.parse(dataStr) } catch { continue }
+      const type = event.type ?? ''
+
+      if (type === 'response.output_text.delta') {
+        const delta = event.delta ?? ''
+        if (!textStarted) {
+          textStarted = true
+          yield sseEvent('content_block_start', {
+            type: 'content_block_start', index: blockIndex,
+            content_block: { type: 'text', text: '' },
+          })
+        }
+        yield sseEvent('content_block_delta', {
+          type: 'content_block_delta', index: blockIndex,
+          delta: { type: 'text_delta', text: delta },
+        })
+        lastText += delta
+
+      } else if (type === 'response.output_item.done') {
+        const item = event.item ?? {}
+        if (item.type === 'function_call') toolCalls.push(item)
+
+      } else if (type === 'response.completed') {
+        // fallback：从 completed response 提取（防止 delta 丢失）
+        const output = event.response?.output ?? []
+        if (!lastText) {
+          for (const item of output) {
+            if (item.type === 'message') {
+              lastText += (item.content ?? [])
+                .filter(p => p.type === 'output_text' || p.type === 'text')
+                .map(p => p.text || '')
+                .join('')
+            }
+          }
+        }
+        if (!toolCalls.length) {
+          for (const item of output) {
+            if (item.type === 'function_call') toolCalls.push(item)
+          }
+        }
+      }
+    }
+  }
+
+  // --- 关闭文本 block ---
+  if (textStarted) {
+    yield sseEvent('content_block_stop', { type: 'content_block_stop', index: blockIndex })
+    blockIndex++
+  }
+
+  // --- 延迟发 tool_use blocks（arguments 此时已完整）---
+  for (let i = 0; i < toolCalls.length; i++) {
+    const tc = toolCalls[i]
+    const idx = blockIndex + i
+    const argsStr = typeof tc.arguments === 'string' ? tc.arguments : JSON.stringify(tc.arguments ?? {})
+    yield sseEvent('content_block_start', {
+      type: 'content_block_start', index: idx,
+      content_block: { type: 'tool_use', id: tc.call_id || tc.id || `tool_${idx}`, name: tc.name || '', input: {} },
+    })
+    yield sseEvent('content_block_delta', {
+      type: 'content_block_delta', index: idx,
+      delta: { type: 'input_json_delta', partial_json: argsStr },
+    })
+    yield sseEvent('content_block_stop', { type: 'content_block_stop', index: idx })
+  }
+
+  const stopReason = toolCalls.length > 0 ? 'tool_use' : 'end_turn'
+  yield sseEvent('message_delta', {
+    type: 'message_delta',
+    delta: { stop_reason: stopReason, stop_sequence: null },
+    usage: { output_tokens: 0 },
+  })
+  yield sseEvent('message_stop', { type: 'message_stop' })
+}
+
 // ---------------------- HTTP 处理 ----------------------
 async function readBody(req) {
   const chunks = []
   for await (const chunk of req) chunks.push(chunk)
   return Buffer.concat(chunks).toString('utf-8')
+}
+
+function estimateInputTokens(req) {
+  let totalChars = flattenTextBlocks(req?.system).length
+  for (const msg of req?.messages || []) {
+    totalChars += flattenTextBlocks(msg?.content).length
+  }
+  return Math.max(1, Math.floor(totalChars / 4))
 }
 
 async function handleMessages(req, res) {
@@ -230,31 +353,39 @@ async function handleMessages(req, res) {
       'Cache-Control': 'no-cache',
       'Connection': 'keep-alive',
     })
-    // 简化：直接透传上游流
-    const reader = upstreamResp.body.getReader()
-    const decoder = new TextDecoder()
     try {
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        res.write(decoder.decode(value, { stream: true }))
+      for await (const chunk of openAIResponsesStreamToAnthropic(upstreamResp.body)) {
+        res.write(chunk)
       }
-      res.write('event: message_stop\ndata: {"type":"message_stop"}\n\n')
-      res.end()
     } catch (err) {
       console.error('[ATO] Stream error:', err.message)
-      res.end()
     }
-  } else {
-    const openaiResp = await upstreamResp.json()
-    const anthropicResp = openAIToAnthropic(openaiResp)
+    res.end()
+    return
+  }
+
+  const openaiResp = await upstreamResp.json()
+  const anthropicResp = openAIToAnthropic(openaiResp)
+  res.writeHead(200, { 'Content-Type': 'application/json' })
+  res.end(JSON.stringify(anthropicResp))
+}
+
+async function handleCountTokens(req, res) {
+  try {
+    const body = await readBody(req)
+    const anthropicReq = JSON.parse(body || '{}')
     res.writeHead(200, { 'Content-Type': 'application/json' })
-    res.end(JSON.stringify(anthropicResp))
+    res.end(JSON.stringify({ input_tokens: estimateInputTokens(anthropicReq) }))
+  } catch {
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({ input_tokens: 0 }))
   }
 }
 
 // ---------------------- 服务器 ----------------------
 const server = http.createServer(async (req, res) => {
+  const url = (req.url || '').split('?')[0]
+
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, anthropic-version')
@@ -265,13 +396,18 @@ const server = http.createServer(async (req, res) => {
     return
   }
 
-  if (req.method === 'GET' && req.url === '/health') {
+  if (req.method === 'GET' && (url === '/health' || url === '/ready')) {
     res.writeHead(200, { 'Content-Type': 'application/json' })
     res.end(JSON.stringify({ status: 'ok', upstream: UPSTREAM_URL }))
     return
   }
 
-  if (req.method === 'POST' && req.url === '/v1/messages') {
+  if (req.method === 'POST' && url === '/v1/messages/count_tokens') {
+    await handleCountTokens(req, res)
+    return
+  }
+
+  if (req.method === 'POST' && url === '/v1/messages') {
     try {
       await handleMessages(req, res)
     } catch (err) {

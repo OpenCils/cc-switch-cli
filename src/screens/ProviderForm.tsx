@@ -55,7 +55,7 @@ export function ProviderForm({ installation, store, editing, onStoreChange, onBa
     useAto:  editing?.useAto  ?? false,
     atoUpstreamUrl: editing?.atoUpstreamUrl ?? '',
     atoApiKey:      editing?.atoApiKey      ?? '',
-    atoPort:        editing?.atoPort        ?? 5000,
+    atoPort:        editing?.atoPort        ?? 18653,
   })
   const [useAto, setUseAto] = useState(editing?.useAto ?? false)
 

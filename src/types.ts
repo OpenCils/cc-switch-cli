@@ -38,7 +38,7 @@ export interface ProviderConfig {
   useAto: boolean     // 是否通过 ATO 代理
   atoUpstreamUrl?: string  // ATO 代理的上游地址
   atoApiKey?: string       // ATO 代理的上游密钥
-  atoPort?: number         // ATO 监听端口，默认 5000
+  atoPort?: number         // ATO 监听端口，默认 18653
 }
 
 // ---------------------- 检测到的安装实例 ----------------------
