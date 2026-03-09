@@ -33,7 +33,7 @@ jobs:
       - name: Inject version into src/version.ts
         shell: bash
         run: |
-          VER="${GITHUB_REF_NAME#v}"
+          export VER="${GITHUB_REF_NAME#v}"
           node - <<'NODE'
           const fs = require('node:fs')
           const path = 'src/version.ts'

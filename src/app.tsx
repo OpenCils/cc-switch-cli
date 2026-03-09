@@ -18,8 +18,7 @@ import { ProviderForm } from './screens/ProviderForm.js'
 import { ExitConfirm } from './screens/ExitConfirm.js'
 import { LanguageSelect } from './screens/LanguageSelect.js'
 import { setLang, t, type Lang } from './i18n/index.js'
-import { VERSION } from './version.js'
-import { canSelfUpdate, checkForUpdates, getInstallCommand, startSelfUpdate } from './updater.js'
+import { CURRENT_VERSION, canSelfUpdate, checkForUpdates, getInstallCommand, startSelfUpdate } from './updater.js'
 
 // ---------------------- 路由类型 ----------------------
 type Screen =
@@ -207,7 +206,7 @@ function App() {
     return (
       <ProviderSelect
         installations={installations}
-        currentVersion={VERSION}
+        currentVersion={CURRENT_VERSION}
         updateAvailable={updateAvailable}
         installCmd={getInstallCommand()}
         canSelfUpdate={canSelfUpdate()}

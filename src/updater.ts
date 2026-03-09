@@ -1,7 +1,7 @@
 /**
  * [INPUT]: 依赖 node:https/child_process/fs/os/path，依赖 types 的 AppStore，依赖 version 的 VERSION
- * [OUTPUT]: 对外提供 checkForUpdates(store)、getInstallCommand()、canSelfUpdate()、startSelfUpdate()
- * [POS]: src/ 的更新模块，负责 GitHub Release 检测、缓存纠偏与独立二进制自更新
+ * [OUTPUT]: 对外提供 CURRENT_VERSION、checkForUpdates(store)、getInstallCommand()、canSelfUpdate()、startSelfUpdate()
+ * [POS]: src/ 的更新模块，负责 GitHub Release 检测、缓存纠偏、版本归一化与独立二进制自更新
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 
@@ -15,10 +15,16 @@ import { VERSION } from './version.js'
 
 const REPO = 'OpenCils/cc-switch-cli'
 const TTL = 24 * 60 * 60 * 1000
+const VERSION_PATTERN = /^\d+\.\d+\.\d+$/
 
 // ---------------------- semver 比较 ----------------------
+function normalizeVersion(value: string | null | undefined): string | null {
+  const normalized = (value ?? '').trim().replace(/^v/, '')
+  return VERSION_PATTERN.test(normalized) ? normalized : null
+}
+
 function compareVersions(a: string, b: string): number {
-  const parse = (value: string) => value.replace(/^v/, '').split('.').map(Number)
+  const parse = (value: string) => value.split('.').map(Number)
   const [a1 = 0, a2 = 0, a3 = 0] = parse(a)
   const [b1 = 0, b2 = 0, b3 = 0] = parse(b)
   if (a1 !== b1) return a1 - b1
@@ -26,14 +32,21 @@ function compareVersions(a: string, b: string): number {
   return a3 - b3
 }
 
-function isNewer(current: string, latest: string): boolean {
-  return compareVersions(latest, current) > 0
+function isNewer(current: string | null | undefined, latest: string | null | undefined): boolean {
+  const cur = normalizeVersion(current)
+  const lat = normalizeVersion(latest)
+  if (!lat) return false
+  if (!cur) return true
+  return compareVersions(lat, cur) > 0
 }
 
 function normalizeCachedUpdate(version?: string): string | null {
-  if (!version) return null
-  return isNewer(VERSION, version) ? version : null
+  const normalized = normalizeVersion(version)
+  if (!normalized) return null
+  return isNewer(CURRENT_VERSION, normalized) ? normalized : null
 }
+
+export const CURRENT_VERSION = normalizeVersion(VERSION) ?? 'unknown'
 
 // ---------------------- 请求 GitHub API ----------------------
 function fetchLatest(): Promise<string | null> {
@@ -52,7 +65,7 @@ function fetchLatest(): Promise<string | null> {
         })
         res.on('end', () => {
           try {
-            resolve((JSON.parse(body).tag_name as string).replace(/^v/, ''))
+            resolve(normalizeVersion(JSON.parse(body).tag_name as string))
           } catch {
             resolve(null)
           }
@@ -87,7 +100,7 @@ export async function checkForUpdates(store: AppStore): Promise<UpdateResult> {
   }
 
   const latest = await fetchLatest()
-  const version = latest && isNewer(VERSION, latest) ? latest : null
+  const version = latest && isNewer(CURRENT_VERSION, latest) ? latest : null
   return { version, didCheck: true, checkedAt: now }
 }
 
@@ -206,5 +219,3 @@ export async function startSelfUpdate(): Promise<SelfUpdateResult> {
     }
   }
 }
-
-export { VERSION }
