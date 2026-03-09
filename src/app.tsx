@@ -1,7 +1,7 @@
 /**
- * [INPUT]: 依赖所有 screens、store 与 ato 生命周期管理，依赖 ink 的 render/useApp/useInput
+ * [INPUT]: 依赖所有 screens、store 与 ato 生命周期管理，依赖 ink 的 render/useApp/useInput，依赖 updater 的版本检测与自更新
  * [OUTPUT]: App 根组件 + 程序入口
- * [POS]: src/ 的顶层路由控制器，负责三屏导航与退出前 ATO 保留/关闭确认
+ * [POS]: src/ 的顶层路由控制器，负责三屏导航、退出前的 ATO 保留/关闭确认，以及首页更新状态
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 
@@ -18,7 +18,8 @@ import { ProviderForm } from './screens/ProviderForm.js'
 import { ExitConfirm } from './screens/ExitConfirm.js'
 import { LanguageSelect } from './screens/LanguageSelect.js'
 import { setLang, t, type Lang } from './i18n/index.js'
-import { checkForUpdates, getInstallCommand } from './updater.js'
+import { VERSION } from './version.js'
+import { canSelfUpdate, checkForUpdates, getInstallCommand, startSelfUpdate } from './updater.js'
 
 // ---------------------- 路由类型 ----------------------
 type Screen =
@@ -76,25 +77,42 @@ function App() {
   const [installations] = useState<Installation[]>(() => detectInstallations())
   const [store, setStore] = useState<AppStore>(() => {
     const s = loadStore()
-    // 首次启动前初始化语言
     if (s.language) setLang(s.language as Lang)
     return s
   })
   const [screen, setScreen] = useState<Screen>({ name: 'select' })
   const [exitDialog, setExitDialog] = useState<ExitDialogState | null>(null)
-  const [updateAvailable, setUpdateAvailable] = useState<string | null>(
-    store.updateAvailable ?? null
-  )
+  const [updateAvailable, setUpdateAvailable] = useState<string | null>(null)
+  const [updateError, setUpdateError] = useState<string | null>(null)
+  const [updating, setUpdating] = useState(false)
 
   // ---- 启动后台更新检测，不阻塞 UI ----
   useEffect(() => {
-    checkForUpdates(store).then(({ version, didCheck, checkedAt }) => {
-      if (didCheck) {
-        const next = { ...store, lastUpdateCheck: checkedAt, updateAvailable: version ?? undefined }
+    let cancelled = false
+
+    void checkForUpdates(store).then(({ version, didCheck, checkedAt }) => {
+      if (cancelled) return
+
+      setUpdateAvailable(version)
+      setStore(prev => {
+        const prevVersion = prev.updateAvailable ?? null
+        if (!didCheck && prevVersion === version) {
+          return prev
+        }
+
+        const next = {
+          ...prev,
+          lastUpdateCheck: checkedAt,
+          updateAvailable: version ?? undefined,
+        }
         saveStore(next)
-      }
-      if (version) setUpdateAvailable(version)
+        return next
+      })
     })
+
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   function requestExit() {
@@ -110,6 +128,22 @@ function App() {
     const next = { ...store, language: lang }
     saveStore(next)
     setStore(next)
+  }
+
+  async function handleUpdateRequest() {
+    if (!updateAvailable || updating) return
+
+    setUpdating(true)
+    setUpdateError(null)
+
+    const result = await startSelfUpdate()
+    if (!result.started) {
+      setUpdating(false)
+      setUpdateError(result.error ?? 'unknown error')
+      return
+    }
+
+    exit()
   }
 
   async function stopAtoAndExit() {
@@ -152,7 +186,6 @@ function App() {
     }
   })
 
-  // 首次启动：未设置语言时先选语言
   if (!store.language) {
     return <LanguageSelect onSelect={handleLanguageSelect} />
   }
@@ -174,10 +207,15 @@ function App() {
     return (
       <ProviderSelect
         installations={installations}
-        onSelect={inst => setScreen({ name: 'provider-list', installation: inst })}
-        onExitRequest={requestExit}
+        currentVersion={VERSION}
         updateAvailable={updateAvailable}
         installCmd={getInstallCommand()}
+        canSelfUpdate={canSelfUpdate()}
+        updateError={updateError}
+        updating={updating}
+        onSelect={inst => setScreen({ name: 'provider-list', installation: inst })}
+        onExitRequest={requestExit}
+        onUpdateRequest={() => void handleUpdateRequest()}
       />
     )
   }

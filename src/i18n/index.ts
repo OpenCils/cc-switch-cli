@@ -82,8 +82,13 @@ const S: Record<Lang, Record<string, string>> = {
     stoppingNAto: 'Stopping {count} ATO(s)...',
     stopFailed: 'Stop failed: {labels}',
     // updater
-    updateAvailableMsg: '✦ v{version} available',
+    currentVersionLabel: 'Current: v{version}',
+    updateAvailableMsg: '✦ v{current} -> v{version} available',
+    updateHotkeyHint: 'Press u to update and exit',
     updateInstallHint: 'Update:',
+    updateManualHint: 'Manual:',
+    updateStarting: 'Starting updater...',
+    updateStartFailed: 'Update failed: {error}',
   },
 
   zh: {
@@ -146,8 +151,13 @@ const S: Record<Lang, Record<string, string>> = {
     stoppingNAto: '正在关闭 {count} 个 ATO...',
     stopFailed: '关闭失败: {labels}',
     // updater
-    updateAvailableMsg: '✦ v{version} 可更新',
+    currentVersionLabel: '当前版本: v{version}',
+    updateAvailableMsg: '✦ 当前 v{current}，可更新到 v{version}',
+    updateHotkeyHint: '按 u 自动更新并退出',
     updateInstallHint: '更新命令:',
+    updateManualHint: '手动更新:',
+    updateStarting: '正在启动更新器...',
+    updateStartFailed: '更新失败: {error}',
   },
 
   ja: {
@@ -210,8 +220,13 @@ const S: Record<Lang, Record<string, string>> = {
     stoppingNAto: '{count} 個の ATO を停止中...',
     stopFailed: '停止失敗: {labels}',
     // updater
-    updateAvailableMsg: '✦ v{version} が利用可能',
+    currentVersionLabel: '現在のバージョン: v{version}',
+    updateAvailableMsg: '✦ 現在 v{current}、v{version} に更新可能',
+    updateHotkeyHint: 'u を押すと更新して終了します',
     updateInstallHint: 'アップデート:',
+    updateManualHint: '手動アップデート:',
+    updateStarting: 'アップデーターを起動中...',
+    updateStartFailed: '更新失敗: {error}',
   },
 
   ko: {
@@ -274,8 +289,13 @@ const S: Record<Lang, Record<string, string>> = {
     stoppingNAto: '{count}개의 ATO 중지 중...',
     stopFailed: '중지 실패: {labels}',
     // updater
-    updateAvailableMsg: '✦ v{version} 업데이트 가능',
+    currentVersionLabel: '현재 버전: v{version}',
+    updateAvailableMsg: '✦ 현재 v{current}, v{version}로 업데이트 가능',
+    updateHotkeyHint: 'u를 눌러 업데이트 후 종료',
     updateInstallHint: '업데이트:',
+    updateManualHint: '수동 업데이트:',
+    updateStarting: '업데이터 시작 중...',
+    updateStartFailed: '업데이트 실패: {error}',
   },
 }
 

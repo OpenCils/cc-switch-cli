@@ -15,10 +15,10 @@ npm start               # 等价
 
 <directory>
 src/              - 源码根目录
-  app.tsx         - 根组件 + 三屏路由状态机，外加退出前的 ATO 保留/关闭确认，启动后台更新检测
+  app.tsx         - 根组件 + 三屏路由状态机，外加退出前的 ATO 保留/关闭确认，启动后台更新检测与自更新入口
   types.ts        - 类型定义：Tool、Environment、Installation、ProviderConfig、AppStore、TOOLS
   version.ts      - 版本常量 VERSION，CI 编译前自动注入 tag 版本号
-  updater.ts      - 更新检测器：查 GitHub Releases API，24h 缓存，返回可用新版本
+  updater.ts      - 更新模块：查 GitHub Releases API、纠正升级后的缓存状态，并启动独立二进制自更新
   components/     - 通用组件
     Banner.tsx    - figlet ANSI Shadow 大字 ASCII art，进入首屏时显示
   screens/        - 四个屏幕组件
