@@ -1,0 +1,29 @@
+{
+  "name": "cc-switch-cli",
+  "version": "1.0.0",
+  "description": "TUI for switching models in Claude Code, Codex, Gemini, and OpenClaw",
+  "type": "module",
+  "bin": {
+    "cc": "./bin/cc.mjs"
+  },
+  "scripts": {
+    "start": "tsx src/app.tsx",
+    "dev": "tsx watch src/app.tsx"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "figlet": "^1.11.0",
+    "ink": "^6.8.0",
+    "ink-text-input": "^6.0.0",
+    "react": "^19.2.4",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  },
+  "devDependencies": {
+    "@types/figlet": "^1.7.0",
+    "@types/node": "^25.3.5",
+    "@types/react": "^19.2.14"
+  }
+}
