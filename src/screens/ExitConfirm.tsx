@@ -7,6 +7,7 @@
 
 import React, { useState } from 'react'
 import { Box, Text, useInput } from 'ink'
+import { t } from '../i18n/index.js'
 
 interface ExitTarget {
   label: string
@@ -35,18 +36,18 @@ export function ExitConfirm({
 
   const options = [
     {
-      label: '保留 ATO 并退出',
-      hint: 'CC Switch 退出，后台 ATO 保持运行',
+      label: t('keepAtoAndExit'),
+      hint: t('keepAtoHint'),
       action: onExitKeepAto,
     },
     {
-      label: hasTargets ? '关闭 ATO 后退出' : '直接退出',
-      hint: hasTargets ? '尝试停止已知 ATO 端口后退出' : '当前没有检测到 ATO 目标',
+      label: hasTargets ? t('stopAtoAndExit') : t('directExit'),
+      hint: hasTargets ? t('stopAtoHint') : t('directExitHint'),
       action: onExitStopAto,
     },
     {
-      label: '取消',
-      hint: '返回 CC Switch',
+      label: t('cancelExit'),
+      hint: t('cancelExitHint'),
       action: onCancel,
     },
   ]
@@ -69,21 +70,21 @@ export function ExitConfirm({
 
   return (
     <Box flexDirection="column" paddingX={2} paddingY={1}>
-      <Text bold color="yellow">退出 CC Switch</Text>
+      <Text bold color="yellow">{t('exitTitle')}</Text>
 
       <Box marginTop={1} flexDirection="column">
         {mode === 'confirm' && (
           <Text dimColor>
             {hasTargets
-              ? `检测到 ${targets.length} 个 ATO 目标，退出时可以选择保留或关闭。`
-              : '当前没有检测到 ATO 目标，直接退出即可。'}
+              ? t('atoDetected', { count: targets.length })
+              : t('noAtoDetected')}
           </Text>
         )}
         {mode === 'stopping' && (
-          <Text color="cyan">{message || '正在关闭 ATO...'}</Text>
+          <Text color="cyan">{message || t('stoppingAto')}</Text>
         )}
         {mode === 'error' && (
-          <Text color="red">{message || 'ATO 关闭失败'}</Text>
+          <Text color="red">{message || t('atoStopFailed')}</Text>
         )}
       </Box>
 
@@ -113,9 +114,9 @@ export function ExitConfirm({
       )}
 
       <Box marginTop={1}>
-        {mode === 'confirm' && <Text dimColor>↑↓ 选择   Enter 确认   Esc 返回</Text>}
-        {mode === 'stopping' && <Text dimColor>请稍候...</Text>}
-        {mode === 'error' && <Text dimColor>Enter 直接退出   r 重试关闭   Esc 返回</Text>}
+        {mode === 'confirm' && <Text dimColor>{t('hintExitConfirm')}</Text>}
+        {mode === 'stopping' && <Text dimColor>{t('hintExitWait')}</Text>}
+        {mode === 'error' && <Text dimColor>{t('hintExitError')}</Text>}
       </Box>
     </Box>
   )
