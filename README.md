@@ -1,7 +1,6 @@
 <div align="center">
-<h1>CC Switch CLI</h1>
-<p><strong>Switch models, providers, and environments for Claude Code, Codex, Gemini, and OpenClaw — all from one terminal.</strong></p>
 <img src="./preview.png" alt="CC Switch CLI terminal preview" width="100%" />
+<h1>CC Switch CLI</h1>
 </div>
 
 ## Install
@@ -17,6 +16,8 @@ irm https://raw.githubusercontent.com/OpenCils/cc-switch-cli/main/install.ps1 | 
 ```
 
 After installation, type `cc` in any terminal to launch.
+
+<p align="center"><strong>Switch models, providers, and environments for Claude Code, Codex, Gemini, and OpenClaw — all from one terminal.</strong></p>
 
 ---
 
