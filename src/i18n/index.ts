@@ -81,6 +81,9 @@ const S: Record<Lang, Record<string, string>> = {
     noAtoConfig: 'No ATO config detected, exiting...',
     stoppingNAto: 'Stopping {count} ATO(s)...',
     stopFailed: 'Stop failed: {labels}',
+    // updater
+    updateAvailableMsg: '✦ v{version} available',
+    updateInstallHint: 'Update:',
   },
 
   zh: {
@@ -142,6 +145,9 @@ const S: Record<Lang, Record<string, string>> = {
     noAtoConfig: '未检测到 ATO 配置，正在退出...',
     stoppingNAto: '正在关闭 {count} 个 ATO...',
     stopFailed: '关闭失败: {labels}',
+    // updater
+    updateAvailableMsg: '✦ v{version} 可更新',
+    updateInstallHint: '更新命令:',
   },
 
   ja: {
@@ -203,6 +209,9 @@ const S: Record<Lang, Record<string, string>> = {
     noAtoConfig: 'ATO 設定が検出されませんでした。終了します...',
     stoppingNAto: '{count} 個の ATO を停止中...',
     stopFailed: '停止失敗: {labels}',
+    // updater
+    updateAvailableMsg: '✦ v{version} が利用可能',
+    updateInstallHint: 'アップデート:',
   },
 
   ko: {
@@ -264,6 +273,9 @@ const S: Record<Lang, Record<string, string>> = {
     noAtoConfig: 'ATO 설정이 감지되지 않았습니다, 종료 중...',
     stoppingNAto: '{count}개의 ATO 중지 중...',
     stopFailed: '중지 실패: {labels}',
+    // updater
+    updateAvailableMsg: '✦ v{version} 업데이트 가능',
+    updateInstallHint: '업데이트:',
   },
 }
 

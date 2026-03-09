@@ -62,6 +62,9 @@ export interface AppStore {
   active: Record<string, string | null>
   // 用户选择的界面语言，undefined 表示首次启动未选择
   language?: string
+  // 更新检测缓存
+  lastUpdateCheck?: number    // 上次调用 GitHub API 的时间戳 ms
+  updateAvailable?: string    // 上次检测到的可用新版本，undefined 表示无更新
 }
 
 // ---------------------- 工具元数据 ----------------------

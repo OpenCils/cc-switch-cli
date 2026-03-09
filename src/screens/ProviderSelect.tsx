@@ -15,9 +15,11 @@ interface Props {
   installations: Installation[]
   onSelect: (inst: Installation) => void
   onExitRequest: () => void
+  updateAvailable?: string | null
+  installCmd?: string
 }
 
-export function ProviderSelect({ installations, onSelect, onExitRequest }: Props) {
+export function ProviderSelect({ installations, onSelect, onExitRequest, updateAvailable, installCmd }: Props) {
   const [cursor, setCursor] = useState(0)
   const items = installations
 
@@ -67,6 +69,14 @@ export function ProviderSelect({ installations, onSelect, onExitRequest }: Props
       <Box marginTop={1}>
         <Text dimColor>{t('hintSelect')}</Text>
       </Box>
+
+      {/* ---- 更新提示横幅 ---- */}
+      {updateAvailable && (
+        <Box marginTop={1} gap={1}>
+          <Text color="yellow">{t('updateAvailableMsg', { version: updateAvailable })}</Text>
+          <Text dimColor>{t('updateInstallHint')} {installCmd}</Text>
+        </Box>
+      )}
 
     </Box>
   )

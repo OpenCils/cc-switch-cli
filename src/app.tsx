@@ -5,7 +5,7 @@
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { render, useApp, useInput } from 'ink'
 import type { AppStore, Installation, ProviderConfig } from './types.js'
 import { instKey } from './types.js'
@@ -18,6 +18,7 @@ import { ProviderForm } from './screens/ProviderForm.js'
 import { ExitConfirm } from './screens/ExitConfirm.js'
 import { LanguageSelect } from './screens/LanguageSelect.js'
 import { setLang, t, type Lang } from './i18n/index.js'
+import { checkForUpdates, getInstallCommand } from './updater.js'
 
 // ---------------------- 路由类型 ----------------------
 type Screen =
@@ -81,6 +82,20 @@ function App() {
   })
   const [screen, setScreen] = useState<Screen>({ name: 'select' })
   const [exitDialog, setExitDialog] = useState<ExitDialogState | null>(null)
+  const [updateAvailable, setUpdateAvailable] = useState<string | null>(
+    store.updateAvailable ?? null
+  )
+
+  // ---- 启动后台更新检测，不阻塞 UI ----
+  useEffect(() => {
+    checkForUpdates(store).then(({ version, didCheck, checkedAt }) => {
+      if (didCheck) {
+        const next = { ...store, lastUpdateCheck: checkedAt, updateAvailable: version ?? undefined }
+        saveStore(next)
+      }
+      if (version) setUpdateAvailable(version)
+    })
+  }, [])
 
   function requestExit() {
     if (exitDialog) return
@@ -161,6 +176,8 @@ function App() {
         installations={installations}
         onSelect={inst => setScreen({ name: 'provider-list', installation: inst })}
         onExitRequest={requestExit}
+        updateAvailable={updateAvailable}
+        installCmd={getInstallCommand()}
       />
     )
   }

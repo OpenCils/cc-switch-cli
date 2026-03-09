@@ -27,13 +27,19 @@ jobs:
 
       - uses: oven-sh/setup-bun@v2
 
-      - name: 安装依赖
+      - name: Install dependencies
         run: bun install
 
-      - name: 编译独立二进制
+      - name: Inject version into src/version.ts
+        shell: bash
+        run: |
+          VER="${GITHUB_REF_NAME#v}"
+          echo "export const VERSION = '$VER'" > src/version.ts
+
+      - name: Build standalone binary
         run: bun build src/app.tsx --compile --target=${{ matrix.target }} --outfile ${{ matrix.artifact }} --external react-devtools-core
 
-      - name: 上传构建产物
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
@@ -46,12 +52,12 @@ jobs:
       contents: write
 
     steps:
-      - name: 下载所有构建产物
+      - name: Download all build artifacts
         uses: actions/download-artifact@v4
         with:
           merge-multiple: true
 
-      - name: 发布 GitHub Release
+      - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
