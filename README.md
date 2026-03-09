@@ -1,11 +1,7 @@
 <div align="center">
-
-# CC Switch CLI
-
-**Switch models, providers, and environments for Claude Code, Codex, Gemini, and OpenClaw — all from one terminal.**
-
+<h1>CC Switch CLI</h1>
+<p><strong>Switch models, providers, and environments for Claude Code, Codex, Gemini, and OpenClaw — all from one terminal.</strong></p>
 <img src="./preview.png" alt="CC Switch CLI terminal preview" width="100%" />
-
 </div>
 
 ## Install
