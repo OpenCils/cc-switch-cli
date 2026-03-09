@@ -1,46 +1,15 @@
 <div align="center">
+<img src="./preview.png" alt="CC Switch CLI terminal preview" width="100%" />
+<h1>CC Switch CLI</h1>
+<p><strong>Claude Code, Codex, Gemini, OpenClaw의 모델·프로바이더·실행 환경을 하나의 터미널에서 전환합니다.</strong></p>
 
 **[English](./README.md) | [中文](./README.zh.md) | [日本語](./README.ja.md) | 한국어**
 
+<img alt="Node.js" src="https://img.shields.io/badge/Node.js-20%2B-2f6f44?style=for-the-badge&logo=node.js&logoColor=white">
+<img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5.9-2f5d95?style=for-the-badge&logo=typescript&logoColor=white">
+<img alt="Ink" src="https://img.shields.io/badge/Ink-6.8-24292f?style=for-the-badge">
+<img alt="TUI" src="https://img.shields.io/badge/Interface-Terminal_UI-a56a17?style=for-the-badge">
 </div>
-
-<div align="center">
-  <img src="./preview.png" alt="CC Switch CLI terminal preview" width="100%" />
-  <h1>CC Switch CLI</h1>
-  <p>Claude Code, Codex, Gemini, OpenClaw의 모델·프로바이더·실행 환경을 하나의 터미널에서 전환합니다.</p>
-  <p>
-    <img alt="Node.js" src="https://img.shields.io/badge/Node.js-20%2B-2f6f44?style=for-the-badge&logo=node.js&logoColor=white">
-    <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5.9-2f5d95?style=for-the-badge&logo=typescript&logoColor=white">
-    <img alt="Ink" src="https://img.shields.io/badge/Ink-6.8-24292f?style=for-the-badge">
-    <img alt="TUI" src="https://img.shields.io/badge/Interface-Terminal_UI-a56a17?style=for-the-badge">
-  </p>
-</div>
-
-<p align="center">
-  단순한 설정 파일 편집기가 아닙니다. 설치된 환경을 자동으로 탐지하고, 도구와 환경 기준으로 프로바이더를 전환하며, 필요 시 ATO 프록시를 자동으로 실행합니다.
-</p>
-
-## 이 도구가 해결하는 것
-
-여러 AI 코딩 툴을 함께 사용할 때 가장 불편한 건 모델 자체가 아니라 설정 파일 관리입니다:
-
-- Claude Code는 `settings.json`
-- Codex는 `config.toml`
-- Gemini와 OpenClaw는 각자의 형식
-- Windows와 WSL은 별개의 환경
-
-`CC Switch CLI`는 이 모든 것을 하나의 터미널 UI로 통합합니다. 설치 환경을 선택하고, 프로바이더를 선택하고, Enter를 누르면 설정 파일 반영과 프록시 관리는 자동으로 처리됩니다.
-
-## 주요 기능
-
-| 기능 | 설명 |
-| --- | --- |
-| 멀티 툴 전환 | Claude Code, Codex, Gemini, OpenClaw 지원 |
-| 멀티 환경 탐지 | Windows, 네이티브 Linux/macOS, WSL 배포판 자동 스캔 |
-| 네이티브 설정 반영 | 툴에 맞게 `settings.json`, `config.toml`, `openclaw.json` 직접 수정 |
-| 프로바이더 관리 | 설치 환경별로 여러 프로바이더 설정을 저장하고 활성 항목 관리 |
-| ATO 프록시 | Claude Code를 OpenAI 호환 API에 연결. 자동 시작/종료, 포트 충돌 회피, 백그라운드 상주 지원 |
-| 종료 관리 | 종료 시 ATO를 백그라운드에서 유지할지 함께 종료할지 명시적으로 선택 |
 
 ## 설치
 
@@ -66,6 +35,28 @@ cd cc-switch-cli
 npm install
 npm start
 ```
+
+## 이 도구가 해결하는 것
+
+여러 AI 코딩 툴을 함께 사용할 때 가장 불편한 건 모델 자체가 아니라 설정 파일 관리입니다:
+
+- Claude Code는 `settings.json`
+- Codex는 `config.toml`
+- Gemini와 OpenClaw는 각자의 형식
+- Windows와 WSL은 별개의 환경
+
+`CC Switch CLI`는 이 모든 것을 하나의 터미널 UI로 통합합니다. 설치 환경을 선택하고, 프로바이더를 선택하고, Enter를 누르면 설정 파일 반영과 프록시 관리는 자동으로 처리됩니다.
+
+## 주요 기능
+
+| 기능 | 설명 |
+| --- | --- |
+| 멀티 툴 전환 | Claude Code, Codex, Gemini, OpenClaw 지원 |
+| 멀티 환경 탐지 | Windows, 네이티브 Linux/macOS, WSL 배포판 자동 스캔 |
+| 네이티브 설정 반영 | 툴에 맞게 `settings.json`, `config.toml`, `openclaw.json` 직접 수정 |
+| 프로바이더 관리 | 설치 환경별로 여러 프로바이더 설정을 저장하고 활성 항목 관리 |
+| ATO 프록시 | Claude Code를 OpenAI 호환 API에 연결. 자동 시작/종료, 포트 충돌 회피, 백그라운드 상주 지원 |
+| 종료 관리 | 종료 시 ATO를 백그라운드에서 유지할지 함께 종료할지 명시적으로 선택 |
 
 ## 사용 방법
 

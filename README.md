@@ -1,6 +1,14 @@
 <div align="center">
 <img src="./preview.png" alt="CC Switch CLI terminal preview" width="100%" />
 <h1>CC Switch CLI</h1>
+<p><strong>Switch models, providers, and environments for Claude Code, Codex, Gemini, and OpenClaw — all from one terminal.</strong></p>
+
+**[English](./README.md) | [中文](./README.zh.md) | [日本語](./README.ja.md) | [한국어](./README.ko.md)**
+
+<img alt="Node.js" src="https://img.shields.io/badge/Node.js-20%2B-2f6f44?style=for-the-badge&logo=node.js&logoColor=white">
+<img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5.9-2f5d95?style=for-the-badge&logo=typescript&logoColor=white">
+<img alt="Ink" src="https://img.shields.io/badge/Ink-6.8-24292f?style=for-the-badge">
+<img alt="TUI" src="https://img.shields.io/badge/Interface-Terminal_UI-a56a17?style=for-the-badge">
 </div>
 
 ## Install
@@ -16,21 +24,6 @@ irm https://raw.githubusercontent.com/OpenCils/cc-switch-cli/main/install.ps1 | 
 ```
 
 After installation, type `cc` in any terminal to launch.
-
-<p align="center"><strong>Switch models, providers, and environments for Claude Code, Codex, Gemini, and OpenClaw — all from one terminal.</strong></p>
-
----
-
-<div align="center">
-
-**[English](./README.md) | [中文](./README.zh.md) | [日本語](./README.ja.md) | [한국어](./README.ko.md)**
-
-<img alt="Node.js" src="https://img.shields.io/badge/Node.js-20%2B-2f6f44?style=for-the-badge&logo=node.js&logoColor=white">
-<img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5.9-2f5d95?style=for-the-badge&logo=typescript&logoColor=white">
-<img alt="Ink" src="https://img.shields.io/badge/Ink-6.8-24292f?style=for-the-badge">
-<img alt="TUI" src="https://img.shields.io/badge/Interface-Terminal_UI-a56a17?style=for-the-badge">
-
-</div>
 
 ## What it does
 

@@ -1,46 +1,15 @@
 <div align="center">
+<img src="./preview.png" alt="CC Switch CLI terminal preview" width="100%" />
+<h1>CC Switch CLI</h1>
+<p><strong>在一个终端里切换 Claude Code、Codex、Gemini、OpenClaw 的模型、供应商与运行环境。</strong></p>
 
 **[English](./README.md) | 中文 | [日本語](./README.ja.md) | [한국어](./README.ko.md)**
 
+<img alt="Node.js" src="https://img.shields.io/badge/Node.js-20%2B-2f6f44?style=for-the-badge&logo=node.js&logoColor=white">
+<img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5.9-2f5d95?style=for-the-badge&logo=typescript&logoColor=white">
+<img alt="Ink" src="https://img.shields.io/badge/Ink-6.8-24292f?style=for-the-badge">
+<img alt="TUI" src="https://img.shields.io/badge/Interface-Terminal_UI-a56a17?style=for-the-badge">
 </div>
-
-<div align="center">
-  <img src="./preview.png" alt="CC Switch CLI terminal preview" width="100%" />
-  <h1>CC Switch CLI</h1>
-  <p>在一个终端里切换 Claude Code、Codex、Gemini、OpenClaw 的模型、供应商与运行环境。</p>
-  <p>
-    <img alt="Node.js" src="https://img.shields.io/badge/Node.js-20%2B-2f6f44?style=for-the-badge&logo=node.js&logoColor=white">
-    <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5.9-2f5d95?style=for-the-badge&logo=typescript&logoColor=white">
-    <img alt="Ink" src="https://img.shields.io/badge/Ink-6.8-24292f?style=for-the-badge">
-    <img alt="TUI" src="https://img.shields.io/badge/Interface-Terminal_UI-a56a17?style=for-the-badge">
-  </p>
-</div>
-
-<p align="center">
-  它不是另一个配置文件编辑器。它会先发现安装实例，再按工具和环境维度切换供应商，并在需要时自动拉起 ATO 代理。
-</p>
-
-## 这项目干什么
-
-当你同时在用多个 AI 编码工具，最烦的不是模型本身，而是到处改配置文件：
-
-- Claude Code 改 `settings.json`
-- Codex 改 `config.toml`
-- Gemini 和 OpenClaw 又各有各的写法
-- Windows 和 WSL 还经常是两套世界
-
-`CC Switch CLI` 把这些碎片收拢进一个终端界面里。你只管选安装实例、选供应商、按下回车，剩下的配置写回和代理进程管理交给它。
-
-## 核心能力
-
-| 能力 | 说明 |
-| --- | --- |
-| 多工具切换 | 支持 Claude Code、Codex、Gemini、OpenClaw |
-| 多环境检测 | 扫描 Windows、本机 Linux/macOS，以及 WSL 发行版中的安装实例 |
-| 原生配置写回 | 按工具适配写入 `settings.json`、`config.toml`、`openclaw.json` |
-| 供应商管理 | 为每个安装实例保存多组供应商配置，并维护当前激活项 |
-| ATO 代理 | 为 Claude Code 桥接 OpenAI 兼容接口，自动启停、自动避让端口、可后台驻留 |
-| 退出治理 | 退出时显式决定保留后台 ATO，还是一并关闭 |
 
 ## 安装
 
@@ -66,6 +35,28 @@ cd cc-switch-cli
 npm install
 npm start
 ```
+
+## 这项目干什么
+
+当你同时在用多个 AI 编码工具，最烦的不是模型本身，而是到处改配置文件：
+
+- Claude Code 改 `settings.json`
+- Codex 改 `config.toml`
+- Gemini 和 OpenClaw 又各有各的写法
+- Windows 和 WSL 还经常是两套世界
+
+`CC Switch CLI` 把这些碎片收拢进一个终端界面里。你只管选安装实例、选供应商、按下回车，剩下的配置写回和代理进程管理交给它。
+
+## 核心能力
+
+| 能力 | 说明 |
+| --- | --- |
+| 多工具切换 | 支持 Claude Code、Codex、Gemini、OpenClaw |
+| 多环境检测 | 扫描 Windows、本机 Linux/macOS，以及 WSL 发行版中的安装实例 |
+| 原生配置写回 | 按工具适配写入 `settings.json`、`config.toml`、`openclaw.json` |
+| 供应商管理 | 为每个安装实例保存多组供应商配置，并维护当前激活项 |
+| ATO 代理 | 为 Claude Code 桥接 OpenAI 兼容接口，自动启停、自动避让端口、可后台驻留 |
+| 退出治理 | 退出时显式决定保留后台 ATO，还是一并关闭 |
 
 ## 交互方式
 
