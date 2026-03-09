@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="./preview.svg" alt="CC Switch CLI terminal preview" width="100%" />
+  <img src="./preview.png" alt="CC Switch CLI terminal preview" width="100%" />
   <h1>CC Switch CLI</h1>
   <p>在一个终端里切换 Claude Code、Codex、Gemini、OpenClaw 的模型、供应商与运行环境。</p>
   <p>
@@ -36,24 +36,29 @@
 | ATO 代理 | 为 Claude Code 桥接 OpenAI 兼容接口，自动启停、自动避让端口、可后台驻留 |
 | 退出治理 | 退出时显式决定保留后台 ATO，还是一并关闭 |
 
-## 快速开始
+## 安装
+
+### WSL / Linux / macOS
 
 ```bash
+curl -fsSL https://raw.githubusercontent.com/OpenCils/cc-switch-cli/main/install.sh | bash
+```
+
+### Windows（PowerShell）
+
+```powershell
+irm https://raw.githubusercontent.com/OpenCils/cc-switch-cli/main/install.ps1 | iex
+```
+
+安装后在任意终端输入 `cc` 即可启动。重新打开终端后生效（或执行 `source ~/.bashrc`）。
+
+### 从源码运行（开发者）
+
+```bash
+git clone https://github.com/OpenCils/cc-switch-cli.git
+cd cc-switch-cli
 npm install
 npm start
-```
-
-也可以直接运行入口：
-
-```bash
-node bin/cc.mjs
-```
-
-如果你希望把它挂成命令：
-
-```bash
-npm link
-cc
 ```
 
 ## 交互方式
@@ -123,7 +128,7 @@ cc
 │     ├─ server.ts
 │     ├─ manager.ts
 │     └─ entry.mjs
-├─ preview.svg
+├─ preview.png
 └─ README.md
 ```
 
@@ -136,6 +141,6 @@ cc
 
 ## 现状
 
-- 当前仓库以源码运行方式为主，还没有发布 npm 包
+- 通过 GitHub Release 分发预编译独立二进制，无需安装 Node.js 或 npm
+- 支持 Linux x64、macOS ARM64、Windows x64 三个平台
 - 界面基于 `Ink` 渲染，适合终端环境，不是 Web 面板
-- 预览图使用仓库内置的 `preview.svg`，GitHub 首页可直接展示
