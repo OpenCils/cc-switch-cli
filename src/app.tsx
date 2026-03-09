@@ -10,12 +10,14 @@ import { render, useApp, useInput } from 'ink'
 import type { AppStore, Installation, ProviderConfig } from './types.js'
 import { instKey } from './types.js'
 import { detectInstallations } from './store/detect.js'
-import { loadStore } from './store/local.js'
+import { loadStore, saveStore } from './store/local.js'
 import { getAtoStatus, stopAto } from './ato/index.js'
 import { ProviderSelect } from './screens/ProviderSelect.js'
 import { ProviderList } from './screens/ProviderList.js'
 import { ProviderForm } from './screens/ProviderForm.js'
 import { ExitConfirm } from './screens/ExitConfirm.js'
+import { LanguageSelect } from './screens/LanguageSelect.js'
+import { setLang, t, type Lang } from './i18n/index.js'
 
 // ---------------------- 路由类型 ----------------------
 type Screen =
@@ -71,7 +73,12 @@ function collectAtoTargets(store: AppStore, installations: Installation[]): AtoE
 function App() {
   const { exit } = useApp()
   const [installations] = useState<Installation[]>(() => detectInstallations())
-  const [store, setStore] = useState<AppStore>(loadStore)
+  const [store, setStore] = useState<AppStore>(() => {
+    const s = loadStore()
+    // 首次启动前初始化语言
+    if (s.language) setLang(s.language as Lang)
+    return s
+  })
   const [screen, setScreen] = useState<Screen>({ name: 'select' })
   const [exitDialog, setExitDialog] = useState<ExitDialogState | null>(null)
 
@@ -83,6 +90,13 @@ function App() {
     })
   }
 
+  function handleLanguageSelect(lang: Lang) {
+    setLang(lang)
+    const next = { ...store, language: lang }
+    saveStore(next)
+    setStore(next)
+  }
+
   async function stopAtoAndExit() {
     if (!exitDialog || exitDialog.mode === 'stopping') return
 
@@ -90,8 +104,8 @@ function App() {
       ...exitDialog,
       mode: 'stopping',
       message: exitDialog.targets.length === 0
-        ? '未检测到 ATO 配置，正在退出...'
-        : `正在关闭 ${exitDialog.targets.length} 个 ATO...`,
+        ? t('noAtoConfig')
+        : t('stoppingNAto', { count: exitDialog.targets.length }),
     })
 
     const results = await Promise.all(exitDialog.targets.map(async target => {
@@ -109,7 +123,7 @@ function App() {
       setExitDialog({
         ...exitDialog,
         mode: 'error',
-        message: `关闭失败: ${failed.join('，')}`,
+        message: t('stopFailed', { labels: failed.join('，') }),
       })
       return
     }
@@ -122,6 +136,11 @@ function App() {
       requestExit()
     }
   })
+
+  // 首次启动：未设置语言时先选语言
+  if (!store.language) {
+    return <LanguageSelect onSelect={handleLanguageSelect} />
+  }
 
   if (exitDialog) {
     return (

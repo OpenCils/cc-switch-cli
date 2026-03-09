@@ -11,28 +11,29 @@ import TextInput from 'ink-text-input'
 import type { AppStore, Installation, ProviderConfig } from '../types.js'
 import { TOOLS, instKey } from '../types.js'
 import { addProvider, updateProvider, saveStore, newId } from '../store/local.js'
+import { t } from '../i18n/index.js'
 
 // ---------------------- 表单字段定义 ----------------------
 interface FieldDef {
   key: keyof Omit<ProviderConfig, 'id' | 'useAto'>
-  label: string
-  placeholder: string
+  labelKey: string
+  placeholderKey: string
   secret?: boolean
 }
 
 const BASE_FIELDS: FieldDef[] = [
-  { key: 'name',    label: '供应商名称', placeholder: '如: Right Code' },
-  { key: 'model',   label: '模型 ID',    placeholder: '如: gpt-5.4-xhigh' },
+  { key: 'name',    labelKey: 'fieldName',    placeholderKey: 'placeholderName' },
+  { key: 'model',   labelKey: 'fieldModel',   placeholderKey: 'placeholderModel' },
 ]
 
 const DIRECT_FIELDS: FieldDef[] = [
-  { key: 'baseUrl', label: '请求地址',   placeholder: '如: https://api.anthropic.com' },
-  { key: 'apiKey',  label: '密钥',       placeholder: 'sk-...', secret: true },
+  { key: 'baseUrl', labelKey: 'fieldBaseUrl', placeholderKey: 'placeholderBaseUrl' },
+  { key: 'apiKey',  labelKey: 'fieldApiKey',  placeholderKey: 'placeholderApiKey', secret: true },
 ]
 
 const ATO_FIELDS: FieldDef[] = [
-  { key: 'atoUpstreamUrl', label: '上游地址',   placeholder: '如: https://code.newcli.com/codex/v1' },
-  { key: 'atoApiKey',      label: '上游密钥',   placeholder: 'sk-...', secret: true },
+  { key: 'atoUpstreamUrl', labelKey: 'fieldAtoUrl', placeholderKey: 'placeholderAtoUrl' },
+  { key: 'atoApiKey',      labelKey: 'fieldAtoKey', placeholderKey: 'placeholderAtoKey', secret: true },
 ]
 
 interface Props {
@@ -128,7 +129,7 @@ export function ProviderForm({ installation, store, editing, onStoreChange, onBa
       {/* ---- 顶栏 ---- */}
       <Box marginBottom={1} gap={1}>
         <Text dimColor>CC Switch › {meta.label} › {installation.env.label} ›</Text>
-        <Text bold color={meta.color}>{isEdit ? '编辑供应商' : '添加供应商'}</Text>
+        <Text bold color={meta.color}>{isEdit ? t('editProvider') : t('addProviderTitle')}</Text>
       </Box>
 
       {/* ---- 表单字段 ---- */}
@@ -141,11 +142,11 @@ export function ProviderForm({ installation, store, editing, onStoreChange, onBa
             return (
               <Box key="toggle" flexDirection="column">
                 <Text color={focused ? meta.color : 'gray'} bold={focused}>
-                  {focused ? '❯ ' : '  '}通过 ATO 代理
+                  {focused ? '❯ ' : '  '}{t('viaAtoProxy')}
                 </Text>
                 <Box paddingLeft={4}>
                   <Text color={useAto ? 'green' : 'gray'}>
-                    {useAto ? '● 开启' : '○ 关闭'}  (Enter 切换)
+                    {useAto ? t('atoOn') : t('atoOff')}  {t('atoToggleHint')}
                   </Text>
                 </Box>
               </Box>
@@ -158,13 +159,13 @@ export function ProviderForm({ installation, store, editing, onStoreChange, onBa
           return (
             <Box key={f.key} flexDirection="column">
               <Text color={focused ? meta.color : 'gray'} bold={focused}>
-                {focused ? '❯ ' : '  '}{f.label}
+                {focused ? '❯ ' : '  '}{t(f.labelKey)}
               </Text>
               <Box paddingLeft={4}>
                 {focused ? (
                   <TextInput
                     value={String(value)}
-                    placeholder={f.placeholder}
+                    placeholder={t(f.placeholderKey)}
                     mask={isSecret ? '*' : undefined}
                     onChange={val => setFields(prev => ({ ...prev, [f.key]: val }))}
                     onSubmit={() => onFieldSubmit(i)}
@@ -173,7 +174,7 @@ export function ProviderForm({ installation, store, editing, onStoreChange, onBa
                   <Text dimColor>
                     {isSecret && value
                       ? '●'.repeat(Math.min(String(value).length, 12))
-                      : value || f.placeholder}
+                      : value || t(f.placeholderKey)}
                   </Text>
                 )}
               </Box>
@@ -189,20 +190,20 @@ export function ProviderForm({ installation, store, editing, onStoreChange, onBa
           bold={focusIdx === fieldCount}
         >
           {focusIdx === fieldCount ? '❯ ' : '  '}
-          [{canSave ? '保存' : '保存(缺必填项)'}]
+          [{canSave ? t('save') : t('saveMissing')}]
         </Text>
         <Text
           color={focusIdx === fieldCount + 1 ? 'red' : undefined}
           bold={focusIdx === fieldCount + 1}
         >
           {focusIdx === fieldCount + 1 ? '❯ ' : '  '}
-          [取消]
+          [{t('cancel')}]
         </Text>
       </Box>
 
       {/* ---- 底部提示 ---- */}
       <Box marginTop={1}>
-        <Text dimColor>↑↓ 切换   Enter 确认/切换开关   Esc 取消</Text>
+        <Text dimColor>{t('hintForm')}</Text>
       </Box>
     </Box>
   )

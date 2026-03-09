@@ -9,6 +9,7 @@ import React, { useState } from 'react'
 import { Box, Text, useInput } from 'ink'
 import { Banner } from '../components/Banner.js'
 import { TOOLS, type Installation } from '../types.js'
+import { t } from '../i18n/index.js'
 
 interface Props {
   installations: Installation[]
@@ -35,7 +36,7 @@ export function ProviderSelect({ installations, onSelect, onExitRequest }: Props
 
       {/* ---- 检测到的安装实例 ---- */}
       {items.length === 0 ? (
-        <Text color="red">未检测到任何已安装的工具</Text>
+        <Text color="red">{t('noInstallations')}</Text>
       ) : (
         <Box flexDirection="column" gap={0}>
           {items.map((inst, i) => {
@@ -64,7 +65,7 @@ export function ProviderSelect({ installations, onSelect, onExitRequest }: Props
 
       {/* ---- 底部快捷键提示 ---- */}
       <Box marginTop={1}>
-        <Text dimColor>↑↓ 移动   Enter 进入   q / Esc / Ctrl+C 退出</Text>
+        <Text dimColor>{t('hintSelect')}</Text>
       </Box>
 
     </Box>

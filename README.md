@@ -1,13 +1,13 @@
 <div align="center">
 
-**[English](./README.en.md) | 中文 | [日本語](./README.ja.md) | [한국어](./README.ko.md)**
+**English | [中文](./README.zh.md) | [日本語](./README.ja.md) | [한국어](./README.ko.md)**
 
 </div>
 
 <div align="center">
   <img src="./preview.png" alt="CC Switch CLI terminal preview" width="100%" />
   <h1>CC Switch CLI</h1>
-  <p>在一个终端里切换 Claude Code、Codex、Gemini、OpenClaw 的模型、供应商与运行环境。</p>
+  <p>Switch models, providers, and environments for Claude Code, Codex, Gemini, and OpenClaw — all from one terminal.</p>
   <p>
     <img alt="Node.js" src="https://img.shields.io/badge/Node.js-20%2B-2f6f44?style=for-the-badge&logo=node.js&logoColor=white">
     <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5.9-2f5d95?style=for-the-badge&logo=typescript&logoColor=white">
@@ -17,32 +17,32 @@
 </div>
 
 <p align="center">
-  它不是另一个配置文件编辑器。它会先发现安装实例，再按工具和环境维度切换供应商，并在需要时自动拉起 ATO 代理。
+  Not another config file editor. It detects your installations first, then lets you switch providers by tool and environment — spinning up the ATO proxy automatically when needed.
 </p>
 
-## 这项目干什么
+## What it does
 
-当你同时在用多个 AI 编码工具，最烦的不是模型本身，而是到处改配置文件：
+When you're juggling multiple AI coding tools, the pain isn't the models themselves — it's scattered config files:
 
-- Claude Code 改 `settings.json`
-- Codex 改 `config.toml`
-- Gemini 和 OpenClaw 又各有各的写法
-- Windows 和 WSL 还经常是两套世界
+- Claude Code wants `settings.json`
+- Codex wants `config.toml`
+- Gemini and OpenClaw each have their own format
+- Windows and WSL are often two completely separate worlds
 
-`CC Switch CLI` 把这些碎片收拢进一个终端界面里。你只管选安装实例、选供应商、按下回车，剩下的配置写回和代理进程管理交给它。
+`CC Switch CLI` pulls all of that into one terminal interface. You pick an installation, pick a provider, hit Enter — it handles the config writes and proxy lifecycle.
 
-## 核心能力
+## Features
 
-| 能力 | 说明 |
+| Feature | Description |
 | --- | --- |
-| 多工具切换 | 支持 Claude Code、Codex、Gemini、OpenClaw |
-| 多环境检测 | 扫描 Windows、本机 Linux/macOS，以及 WSL 发行版中的安装实例 |
-| 原生配置写回 | 按工具适配写入 `settings.json`、`config.toml`、`openclaw.json` |
-| 供应商管理 | 为每个安装实例保存多组供应商配置，并维护当前激活项 |
-| ATO 代理 | 为 Claude Code 桥接 OpenAI 兼容接口，自动启停、自动避让端口、可后台驻留 |
-| 退出治理 | 退出时显式决定保留后台 ATO，还是一并关闭 |
+| Multi-tool switching | Supports Claude Code, Codex, Gemini, OpenClaw |
+| Multi-environment detection | Scans Windows, native Linux/macOS, and WSL distros |
+| Native config write-back | Writes to `settings.json`, `config.toml`, `openclaw.json` per tool |
+| Provider management | Store multiple provider configs per installation, track the active one |
+| ATO proxy | Bridges Claude Code to OpenAI-compatible APIs — auto start/stop, port conflict avoidance, background persistence |
+| Exit governance | Explicitly choose to keep ATO running in the background or shut it down on exit |
 
-## 安装
+## Installation
 
 ### WSL / Linux / macOS
 
@@ -50,15 +50,15 @@
 curl -fsSL https://raw.githubusercontent.com/OpenCils/cc-switch-cli/main/install.sh | bash
 ```
 
-### Windows（PowerShell）
+### Windows (PowerShell)
 
 ```powershell
 irm https://raw.githubusercontent.com/OpenCils/cc-switch-cli/main/install.ps1 | iex
 ```
 
-安装后在任意终端输入 `cc` 即可启动。重新打开终端后生效（或执行 `source ~/.bashrc`）。
+After installation, type `cc` in any terminal to launch. Reopen your terminal or run `source ~/.bashrc` to pick up the PATH update.
 
-### 从源码运行（开发者）
+### Run from source (developers)
 
 ```bash
 git clone https://github.com/OpenCils/cc-switch-cli.git
@@ -67,86 +67,55 @@ npm install
 npm start
 ```
 
-## 交互方式
+## Usage
 
-1. 首屏列出检测到的安装实例，例如 `Claude Code [Linux]` 或 `Codex [WSL: Ubuntu-24.04]`
-2. 进入某个实例后，管理该实例名下的供应商列表
-3. 激活供应商时，CC Switch 会把模型、地址、密钥写回对应工具原生配置
-4. 如果该供应商启用了 ATO，程序会自动处理代理端口与进程生命周期
-5. 退出时可选择保留 ATO 后台运行，或统一关闭
+1. The first screen lists all detected installations — e.g. `Claude Code [Linux]` or `Codex [WSL: Ubuntu-24.04]`
+2. Enter an installation to manage its provider list
+3. Activating a provider writes the model, base URL, and API key back to that tool's native config
+4. If the provider has ATO enabled, CC Switch manages the proxy port and process lifecycle automatically
+5. On exit, choose to keep ATO running in the background or shut everything down
 
-## 键盘操作
+## Keyboard shortcuts
 
-| 屏幕 | 按键 | 动作 |
+| Screen | Key | Action |
 | --- | --- | --- |
-| 入口屏 | `↑` / `↓` | 移动光标 |
-| 入口屏 | `Enter` | 进入安装实例 |
-| 入口屏 | `q` / `Esc` | 打开退出确认 |
-| 全局 | `Ctrl+C` | 打开退出确认 |
-| 表单屏 | `Tab` / `Shift+Tab` | 切换字段 |
-| 表单屏 | `Enter` | 下一字段或提交 |
-| 表单屏 | `Ctrl+S` | 保存 |
-| 表单屏 | `Esc` | 取消 |
+| Entry screen | `↑` / `↓` | Move cursor |
+| Entry screen | `Enter` | Enter installation |
+| Entry screen | `q` / `Esc` | Open exit confirmation |
+| Global | `Ctrl+C` | Open exit confirmation |
+| Form screen | `Tab` / `Shift+Tab` | Switch fields |
+| Form screen | `Enter` | Next field or submit |
+| Form screen | `Ctrl+S` | Save |
+| Form screen | `Esc` | Cancel |
 
-## ATO 是怎么接进去的
+## How ATO works
 
-当供应商配置启用 `通过 ATO 代理` 时，CC Switch 会：
+When a provider has `Via ATO Proxy` enabled, CC Switch will:
 
-1. 把 Claude Code 指向本地 ATO 端口
-2. 将 Anthropic 风格请求转换成 OpenAI Responses API
-3. 把响应再转换回 Anthropic 格式
-4. 以独立进程运行代理，避免主 TUI 退出后中断会话
+1. Point Claude Code at the local ATO port
+2. Translate Anthropic-style requests into OpenAI Responses API format
+3. Translate responses back into Anthropic format
+4. Run the proxy as a detached process so it survives the TUI exiting
 
-默认端口是 `18653`。如果端口已被占用，程序会自动顺延扫描空闲端口，并把最终端口写回本地存储。
+Default port is `18653`. If that port is occupied, CC Switch scans for the next available port and persists it.
 
-## 配置文件
+## Config files
 
-| 位置 | 用途 |
+| Location | Purpose |
 | --- | --- |
-| `~/.cc-switch.json` | CC Switch 自己的供应商存储与激活状态 |
-| 工具原生配置文件 | 激活供应商时写回模型、地址和密钥 |
-| `~/.cc-switch-ato/` | ATO 进程记录 |
+| `~/.cc-switch.json` | CC Switch's own provider store and active state |
+| Tool-native config files | Written on provider activation |
+| `~/.cc-switch-ato/` | ATO process records |
 
-## 项目结构
+## Who it's for
 
-```text
-.
-├─ bin/
-│  └─ cc.mjs
-├─ src/
-│  ├─ app.tsx
-│  ├─ types.ts
-│  ├─ components/
-│  │  └─ Banner.tsx
-│  ├─ screens/
-│  │  ├─ ProviderSelect.tsx
-│  │  ├─ ProviderList.tsx
-│  │  ├─ ProviderForm.tsx
-│  │  └─ ExitConfirm.tsx
-│  ├─ store/
-│  │  ├─ detect.ts
-│  │  ├─ local.ts
-│  │  ├─ write-wsl.ts
-│  │  └─ adapters/
-│  └─ ato/
-│     ├─ convert.ts
-│     ├─ response.ts
-│     ├─ server.ts
-│     ├─ manager.ts
-│     └─ entry.mjs
-├─ preview.png
-└─ README.md
-```
+- Developers juggling multiple AI coding CLIs who need to switch models frequently
+- Windows + WSL hybrid workflow users
+- Anyone who wants to connect Claude Code to an OpenAI-compatible model
+- People tired of editing config files by hand
 
-## 适合谁
+## Status
 
-- 同时使用多个 AI 编码 CLI，需要频繁切模型的人
-- Windows + WSL 混合工作流用户
-- 想把 Claude Code 接到 OpenAI 兼容模型上的人
-- 不想再手改多份配置文件的人
-
-## 现状
-
-- 通过 GitHub Release 分发预编译独立二进制，无需安装 Node.js 或 npm
-- 支持 Linux x64、macOS ARM64、Windows x64 三个平台
-- 界面基于 `Ink` 渲染，适合终端环境，不是 Web 面板
+- Distributed as precompiled standalone binaries via GitHub Releases — no Node.js or npm required
+- Supports Linux x64, macOS ARM64, Windows x64
+- Terminal UI built on `Ink`, not a web panel

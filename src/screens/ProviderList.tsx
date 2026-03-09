@@ -13,6 +13,7 @@ import { removeProvider, saveStore, setActive, updateProvider } from '../store/l
 import { writeConfig } from '../store/adapters/index.js'
 import { writeConfigWsl } from '../store/write-wsl.js'
 import { getAtoStatus, isPortInUse, startAto } from '../ato/index.js'
+import { t } from '../i18n/index.js'
 
 interface Props {
   installation: Installation
@@ -44,6 +45,7 @@ export function ProviderList({ installation, store, onStoreChange, onAdd, onEdit
   const [cursor, setCursor] = useState(0)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [feedback, setFeedback] = useState('')
+  const [feedbackIsError, setFeedbackIsError] = useState(false)
   const [activating, setActivating] = useState(false)
   const [atoStatus, setAtoStatus] = useState<{ running: boolean; port: number } | null>(null)
 
@@ -96,7 +98,7 @@ export function ProviderList({ installation, store, onStoreChange, onAdd, onEdit
       }
     }
 
-    throw new Error(`ATO 端口冲突，${desiredPort}-${desiredPort + MAX_PORT_SCAN} 都不可用`)
+    throw new Error(t('atoPortConflict', { ports: `${desiredPort}-${desiredPort + MAX_PORT_SCAN}` }))
   }
 
   async function applyProvider(provider: ProviderConfig): Promise<ApplyResult> {
@@ -107,7 +109,7 @@ export function ProviderList({ installation, store, onStoreChange, onAdd, onEdit
 
     if (provider.useAto) {
       if (!provider.atoUpstreamUrl || !provider.atoApiKey) {
-        return { ok: false, error: 'ATO 上游地址或密钥缺失', appliedProvider: provider, nextStore }
+        return { ok: false, error: t('atoMissingConfig'), appliedProvider: provider, nextStore }
       }
 
       const resolved = await resolveAtoPort(provider)
@@ -118,7 +120,7 @@ export function ProviderList({ installation, store, onStoreChange, onAdd, onEdit
           ...provider,
           atoPort: resolved.port,
         }
-        warning = `ATO 端口已从 ${provider.atoPort ?? DEFAULT_ATO_PORT} 自动切到 ${resolved.port}`
+        warning = t('atoPortChanged', { old: String(provider.atoPort ?? DEFAULT_ATO_PORT), new: String(resolved.port) })
       }
 
       const result = await startAto({
@@ -136,7 +138,7 @@ export function ProviderList({ installation, store, onStoreChange, onAdd, onEdit
       } else {
         return {
           ok: false,
-          error: `ATO 启动失败 (${result.error})`,
+          error: t('atoStartFailed', { error: result.error ?? '' }),
           appliedProvider: nextProvider,
           nextStore,
         }
@@ -167,21 +169,24 @@ export function ProviderList({ installation, store, onStoreChange, onAdd, onEdit
     if (activating) return
 
     setActivating(true)
-    setFeedback(`正在激活: ${provider.name}`)
+    setFeedback(t('activating', { name: provider.name }))
 
     try {
       const result = await applyProvider(provider)
       if (!result.ok) {
-        setFeedback(`激活失败: ${result.error}`)
+        setFeedbackIsError(true)
+      setFeedback(t('activateFailed', { error: result.error ?? '' }))
         return
       }
 
       const next = setActive(result.nextStore, storeKey, result.appliedProvider.id)
       saveStore(next)
       onStoreChange(next)
-      setFeedback(result.warning ? `✓ 已激活: ${provider.name} (${result.warning})` : `✓ 已激活: ${provider.name}`)
+      setFeedbackIsError(false)
+      setFeedback(result.warning ? t('activatedWarning', { name: provider.name, warning: result.warning }) : t('activated', { name: provider.name }))
     } catch (err: any) {
-      setFeedback(`激活失败: ${err?.message || String(err)}`)
+      setFeedbackIsError(true)
+      setFeedback(t('activateFailed', { error: err?.message || String(err) }))
     } finally {
       setActivating(false)
     }
@@ -194,7 +199,8 @@ export function ProviderList({ installation, store, onStoreChange, onAdd, onEdit
         saveStore(next)
         onStoreChange(next)
         setCursor(i => Math.min(i, (next.providers[storeKey] ?? []).length))
-        setFeedback('已删除')
+        setFeedbackIsError(false)
+        setFeedback(t('deleted'))
       }
       setConfirmDelete(false)
       return
@@ -237,7 +243,7 @@ export function ProviderList({ installation, store, onStoreChange, onAdd, onEdit
       <Box flexDirection="column">
         <Box paddingX={1} gap={1}>
           <Text color={cursor === 0 ? 'cyan' : 'gray'} bold={cursor === 0}>
-            {cursor === 0 ? '❯' : ' '} + 添加供应商
+            {cursor === 0 ? '❯' : ' '} {t('addProvider')}
           </Text>
         </Box>
 
@@ -269,11 +275,11 @@ export function ProviderList({ installation, store, onStoreChange, onAdd, onEdit
       {/* ---- 底部反馈/提示 ---- */}
       <Box marginTop={1}>
         {feedback ? (
-          <Text color={feedback.startsWith('激活失败') ? 'red' : 'green'} bold>{feedback}</Text>
+          <Text color={feedbackIsError ? 'red' : 'green'} bold>{feedback}</Text>
         ) : confirmDelete ? (
-          <Text color="red" bold>确认删除 "{curProvider?.name}"？再按 d / Esc 取消</Text>
+          <Text color="red" bold>{t('confirmDelete', { name: curProvider?.name ?? '' })}</Text>
         ) : (
-          <Text dimColor>{activating ? '正在启动 ATO / 写入配置...' : '↑↓ 移动   Enter 进入   s 激活   d 删除   Esc 返回'}</Text>
+          <Text dimColor>{activating ? t('activatingAto') : t('hintList')}</Text>
         )}
       </Box>
     </Box>

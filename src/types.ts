@@ -60,6 +60,8 @@ export interface AppStore {
   providers: Record<string, ProviderConfig[]>
   // 键: instKey，值: 当前激活的供应商 ID
   active: Record<string, string | null>
+  // 用户选择的界面语言，undefined 表示首次启动未选择
+  language?: string
 }
 
 // ---------------------- 工具元数据 ----------------------
