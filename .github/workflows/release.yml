@@ -36,8 +36,15 @@ jobs:
           VER="${GITHUB_REF_NAME#v}"
           echo "export const VERSION = '$VER'" > src/version.ts
 
+      - name: Stub react-devtools-core (not available in standalone binary)
+        shell: bash
+        run: |
+          mkdir -p node_modules/react-devtools-core
+          echo 'module.exports = {}' > node_modules/react-devtools-core/index.js
+          echo '{"name":"react-devtools-core","version":"0.0.0","main":"index.js"}' > node_modules/react-devtools-core/package.json
+
       - name: Build standalone binary
-        run: bun build src/app.tsx --compile --target=${{ matrix.target }} --outfile ${{ matrix.artifact }} --external react-devtools-core
+        run: bun build src/app.tsx --compile --target=${{ matrix.target }} --outfile ${{ matrix.artifact }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
