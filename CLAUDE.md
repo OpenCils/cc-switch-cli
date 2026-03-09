@@ -9,7 +9,7 @@ npm start               # 等价
 
 ## 顶层文件
 - `README.md` — GitHub 项目首页文档，负责对外展示项目定位、预览图、上手方式与核心能力
-- `preview.svg` — README 首屏终端预览图，仓库内托管，确保 GitHub 页面直接展示界面
+- `preview.png` — README 首屏真实终端截图，仓库内托管，确保 GitHub 页面直接展示当前界面
 
 ## 架构
 
