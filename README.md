@@ -1,4 +1,10 @@
 <div align="center">
+
+**[English](./README.en.md) | 中文 | [日本語](./README.ja.md) | [한국어](./README.ko.md)**
+
+</div>
+
+<div align="center">
   <img src="./preview.png" alt="CC Switch CLI terminal preview" width="100%" />
   <h1>CC Switch CLI</h1>
   <p>在一个终端里切换 Claude Code、Codex、Gemini、OpenClaw 的模型、供应商与运行环境。</p>
