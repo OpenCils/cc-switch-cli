@@ -1,11 +1,11 @@
 /**
  * [INPUT]: ATO 配置（端口、上游地址、密钥）+ 目标环境
- * [OUTPUT]: 启动/停止/检测 ATO 进程
- * [POS]: ATO 进程管理器，支持 Windows 和 WSL 独立运行
+ * [OUTPUT]: 启动/停止/检测 ATO 进程，兼容源码态 Node 与编译态自举子进程
+ * [POS]: ATO 进程管理器，支持 Windows / WSL 独立运行，并负责隐藏 Windows 子进程弹窗
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 
-import { spawn, spawnSync, ChildProcess } from 'child_process'
+import { spawn, spawnSync } from 'child_process'
 import fs from 'fs'
 import path from 'path'
 import os from 'os'
@@ -25,6 +25,7 @@ interface AtoProcessRecord {
 const PID_DIR = path.join(os.homedir(), '.cc-switch-ato')
 const PID_FILE = (port: number, env: string, distro?: string) =>
   path.join(PID_DIR, `ato-${env}${distro ? `-${distro}` : ''}-${port}.json`)
+const SHOULD_HIDE_WINDOWS = process.platform === 'win32'
 
 function ensurePidDir() {
   if (!fs.existsSync(PID_DIR)) fs.mkdirSync(PID_DIR, { recursive: true })
@@ -54,10 +55,54 @@ function removePidRecord(port: number, env: string, distro?: string) {
   }
 }
 
+function runDetached(command: string, args: string[], options: any) {
+  return spawn(command, args, SHOULD_HIDE_WINDOWS ? { ...options, windowsHide: true } : options)
+}
+
+function runSync(command: string, args: string[], options: any) {
+  return spawnSync(command, args, SHOULD_HIDE_WINDOWS ? { ...options, windowsHide: true } : options)
+}
+
+function isNodeRuntimeExecutable(execPath: string): boolean {
+  return /(^|[\\/])node(?:\.exe)?$/i.test(execPath)
+}
+
+function resolveWindowsAtoCommand(): { command: string; args: string[] } {
+  if (isNodeRuntimeExecutable(process.execPath)) {
+    const entryPath = fileURLToPath(new URL('./entry.mjs', import.meta.url))
+    return { command: process.execPath, args: [entryPath] }
+  }
+
+  // 编译产物没有外部 node 入口时，直接自举当前可执行文件进入 ATO 子进程模式。
+  return { command: process.execPath, args: ['--ato-child'] }
+}
+
+function quoteForBash(value: string): string {
+  return `'${value.replace(/'/g, "'\"'\"'")}'`
+}
+
+function summarizeWslStartError(output: string): string {
+  const lines = output
+    .split('\n')
+    .map(line => line.trim())
+    .filter(Boolean)
+
+  if (lines.includes('NODE_NOT_FOUND')) {
+    return 'Node.js not found in WSL'
+  }
+
+  if (lines.length === 0) {
+    return 'Failed to start ATO in WSL'
+  }
+
+  const firstUsefulLine = lines.find(line => line !== 'FAILED')
+  return firstUsefulLine ?? 'ATO process exited before health check'
+}
+
 // ---------------------- 检测进程是否存活 ----------------------
 function isProcessAliveWindows(pid: number): boolean {
   try {
-    const result = spawnSync('tasklist', ['/FI', `PID eq ${pid}`, '/NH'], {
+    const result = runSync('tasklist', ['/FI', `PID eq ${pid}`, '/NH'], {
       encoding: 'utf-8',
       timeout: 3000,
     })
@@ -69,7 +114,7 @@ function isProcessAliveWindows(pid: number): boolean {
 
 function isProcessAliveWsl(distro: string, pid: number): boolean {
   try {
-    const result = spawnSync('wsl', ['-d', distro, '--', 'kill', '-0', String(pid)], {
+    const result = runSync('wsl', ['-d', distro, '--', 'kill', '-0', String(pid)], {
       encoding: 'utf-8',
       timeout: 3000,
     })
@@ -82,7 +127,7 @@ function isProcessAliveWsl(distro: string, pid: number): boolean {
 // ---------------------- 杀死进程 ----------------------
 function killProcessWindows(pid: number): boolean {
   try {
-    spawnSync('taskkill', ['/F', '/PID', String(pid)], { timeout: 5000 })
+    runSync('taskkill', ['/F', '/PID', String(pid)], { timeout: 5000 })
     return true
   } catch {
     return false
@@ -91,7 +136,7 @@ function killProcessWindows(pid: number): boolean {
 
 function killProcessWsl(distro: string, pid: number): boolean {
   try {
-    spawnSync('wsl', ['-d', distro, '--', 'kill', String(pid)], { timeout: 5000 })
+    runSync('wsl', ['-d', distro, '--', 'kill', String(pid)], { timeout: 5000 })
     return true
   } catch {
     return false
@@ -118,10 +163,10 @@ async function startAtoWindows(options: {
   }
 
   // 启动独立进程
-  const entryPath = fileURLToPath(new URL('./entry.mjs', import.meta.url))
+  const launch = resolveWindowsAtoCommand()
   const args = ['--port', String(port), '--upstream', upstreamUrl, '--key', upstreamKey]
 
-  const child = spawn(process.execPath, [entryPath, ...args], {
+  const child = runDetached(launch.command, [...launch.args, ...args], {
     detached: true,
     stdio: 'ignore',
     env: {
@@ -169,16 +214,18 @@ async function startAtoWsl(options: {
   }
 
   // 确保 WSL 里有目录
-  spawnSync('wsl', ['-d', distro, '--', 'bash', '-c', `mkdir -p ~/.cc-switch-ato`], {
+  runSync('wsl', ['-d', distro, '--', 'bash', '-c', `mkdir -p ~/.cc-switch-ato`], {
     encoding: 'utf-8',
     timeout: 5000,
   })
 
-  // 写入 entry 脚本（直接复用同一份 entry.mjs，避免 Windows/WSL 逻辑漂移）
+  // 写入 runtime / entry 脚本（WSL 只运行 entry.mjs CLI 壳，核心逻辑统一落在 runtime.mjs）
   const entryContent = fs.readFileSync(fileURLToPath(new URL('./entry.mjs', import.meta.url)), { encoding: 'utf-8' })
+  const runtimeContent = fs.readFileSync(fileURLToPath(new URL('./runtime.mjs', import.meta.url)), { encoding: 'utf-8' })
   const entryBase64 = Buffer.from(entryContent).toString('base64')
-  spawnSync('wsl', ['-d', distro, '--', 'bash', '-c',
-    `echo "${entryBase64}" | base64 -d > ~/.cc-switch-ato/entry.mjs`], {
+  const runtimeBase64 = Buffer.from(runtimeContent).toString('base64')
+  runSync('wsl', ['-d', distro, '--', 'bash', '-c',
+    `echo "${entryBase64}" | base64 -d > ~/.cc-switch-ato/entry.mjs && echo "${runtimeBase64}" | base64 -d > ~/.cc-switch-ato/runtime.mjs`], {
     encoding: 'utf-8',
     timeout: 10000,
   })
@@ -186,8 +233,37 @@ async function startAtoWsl(options: {
   // 写入启动脚本（使用 disown 让进程完全脱离）
   const startScript = `#!/bin/bash
 set -e
-source ~/.nvm/nvm.sh
 cd ~/.cc-switch-ato
+
+resolve_node() {
+  if command -v node >/dev/null 2>&1; then
+    command -v node
+    return 0
+  fi
+
+  if [ -s "$HOME/.nvm/nvm.sh" ]; then
+    . "$HOME/.nvm/nvm.sh" >/dev/null 2>&1 || true
+  fi
+
+  if command -v node >/dev/null 2>&1; then
+    command -v node
+    return 0
+  fi
+
+  for candidate in /usr/bin/node /usr/local/bin/node; do
+    if [ -x "$candidate" ]; then
+      echo "$candidate"
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+NODE_BIN="$(resolve_node)" || {
+  echo "NODE_NOT_FOUND"
+  exit 1
+}
 
 # 检查是否已运行
 if curl -s --noproxy '*' http://127.0.0.1:$1/health > /dev/null 2>&1; then
@@ -200,7 +276,7 @@ pkill -f "entry.mjs.*--port $1" 2>/dev/null || true
 sleep 0.5
 
 # 后台启动并完全脱离
-nohup node entry.mjs --port $1 --upstream "$2" --key "$3" > ato.log 2>&1 &
+nohup "$NODE_BIN" entry.mjs --port "$1" --upstream "$2" --key "$3" > ato.log 2>&1 &
 PID=$!
 disown $PID
 
@@ -218,22 +294,39 @@ tail -5 ato.log
 exit 1
 `
   const scriptBase64 = Buffer.from(startScript).toString('base64')
-  spawnSync('wsl', ['-d', distro, '--', 'bash', '-c',
+  runSync('wsl', ['-d', distro, '--', 'bash', '-c',
     `echo "${scriptBase64}" | base64 -d > ~/.cc-switch-ato/start-ato.sh && chmod +x ~/.cc-switch-ato/start-ato.sh`], {
     encoding: 'utf-8',
     timeout: 10000,
   })
 
-  // 启动（异步，不阻塞 UI）
-  const startCmd = `source ~/.nvm/nvm.sh && setsid ~/.cc-switch-ato/start-ato.sh ${port} "${upstreamUrl}" "${upstreamKey}" > ~/.cc-switch-ato/start.log 2>&1 &`
-  spawn('wsl', ['-d', distro, '--', 'bash', '-l', '-c', startCmd], {
-    detached: true,
-    stdio: 'ignore',
+  // 同步执行启动脚本；脚本内部已经负责后台化 node 进程并完成健康检查
+  const startResult = runSync('wsl', ['-d', distro, '--', 'bash', '-l', '-c',
+    `~/.cc-switch-ato/start-ato.sh ${quoteForBash(String(port))} ${quoteForBash(upstreamUrl)} ${quoteForBash(upstreamKey)}`], {
+    encoding: 'utf-8',
+    timeout: 15000,
   })
+  const startOutput = `${startResult.stdout || ''}\n${startResult.stderr || ''}`.trim()
 
-  // 等待服务启动（轮询检测）
-  for (let i = 0; i < 10; i++) {
-    await new Promise(r => setTimeout(r, 500))
+  if (startOutput.includes('ALREADY_RUNNING') || startOutput.includes('STARTED_PID=')) {
+    savePidRecord(port, {
+      pid: 0,
+      port,
+      upstreamUrl,
+      startedAt: new Date().toISOString(),
+      env: 'wsl',
+      distro,
+    })
+    return {
+      success: true,
+      port,
+      env: 'wsl',
+      distro,
+      error: startOutput.includes('ALREADY_RUNNING') ? 'ATO already running' : undefined,
+    }
+  }
+
+  if (startResult.status === 0) {
     const ok = await checkAtoRunningWsl(distro, port)
     if (ok) {
       savePidRecord(port, {
@@ -248,24 +341,12 @@ exit 1
     }
   }
 
-  // 检查启动日志
-  const logResult = spawnSync('wsl', ['-d', distro, '--', 'bash', '-l', '-c',
-    'cat ~/.cc-switch-ato/start.log 2>/dev/null | head -5'], {
-    encoding: 'utf-8',
-    timeout: 5000,
-  })
-  const logOutput = (logResult.stdout || '').trim()
-
-  if (logOutput.includes('ALREADY_RUNNING')) {
-    return { success: true, port, env: 'wsl', distro, error: 'ATO already running' }
-  }
-
-  console.log('[ATO] WSL start log:', logOutput)
-  return { success: false, port, env: 'wsl', distro, error: 'Failed to start ATO in WSL' }
+  console.log('[ATO] WSL start log:', startOutput)
+  return { success: false, port, env: 'wsl', distro, error: summarizeWslStartError(startOutput) }
 }
 
 async function getWslUser(distro: string): Promise<string> {
-  const result = spawnSync('wsl', ['-d', distro, '--', 'whoami'], {
+  const result = runSync('wsl', ['-d', distro, '--', 'whoami'], {
     encoding: 'utf-8',
     timeout: 5000,
   })
@@ -275,7 +356,7 @@ async function getWslUser(distro: string): Promise<string> {
 async function checkAtoRunningWsl(distro: string, port: number): Promise<boolean> {
   try {
     // 用进程检测代替 HTTP（避免代理干扰）
-    const result = spawnSync('wsl', ['-d', distro, '--', 'bash', '-l', '-c',
+    const result = runSync('wsl', ['-d', distro, '--', 'bash', '-l', '-c',
       `pgrep -f "entry.mjs.*--port ${port}"`], {
       encoding: 'utf-8',
       timeout: 5000,
@@ -317,7 +398,7 @@ export async function stopAto(port: number, env: 'windows' | 'wsl' = 'windows', 
     }
   } else if (env === 'wsl' && distro) {
     // WSL: 通过端口找进程并杀掉
-    spawnSync('wsl', ['-d', distro, '--', 'bash', '-c', `pkill -f "entry.mjs.*--port ${port}" || true`], {
+    runSync('wsl', ['-d', distro, '--', 'bash', '-c', `pkill -f "entry.mjs.*--port ${port}" || true`], {
       encoding: 'utf-8',
       timeout: 5000,
     })

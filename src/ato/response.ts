@@ -1,13 +1,15 @@
 /**
  * [INPUT]: OpenAI Responses API 响应格式（流式/非流式）
- * [OUTPUT]: Anthropic API 响应格式
- * [POS]: ATO 核心转换器，处理下行响应转换
+ * [OUTPUT]: 对外提供带类型的响应转换结果与 SSE 事件辅助函数
+ * [POS]: ato/ 的 TypeScript 类型壳；非流式转换与 SSE 事件委托 runtime.mjs，chunk 流工具保持独立导出
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 
+const runtime = await import(new URL('./runtime.mjs', import.meta.url).href)
+
 // ---------------------- SSE 辅助 ----------------------
 export function emitEvent(event: string, data: unknown): string {
-  return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`
+  return runtime.emitEvent(event, data) as string
 }
 
 function parseSSEEvents(chunks: string[]): [string, unknown][] {
@@ -47,6 +49,12 @@ interface OpenAIResponse {
   id?: string
   model?: string
   output?: OpenAIOutputItem[]
+  response?: {
+    id?: string
+    model?: string
+    output?: OpenAIOutputItem[]
+    usage?: { input_tokens?: number; output_tokens?: number }
+  }
   usage?: { input_tokens?: number; output_tokens?: number }
 }
 
@@ -113,40 +121,7 @@ function extractToolCalls(items: OpenAIOutputItem[]): { id: string; name: string
 }
 
 export function openAIToAnthropic(res: OpenAIResponse): AnthropicResponse {
-  const output = res.output || []
-  const text = extractTextFromOutput(output)
-  const toolCalls = extractToolCalls(output)
-
-  const content: AnthropicContentBlock[] = []
-  if (text) {
-    content.push({ type: 'text', text })
-  }
-  for (const tc of toolCalls) {
-    let input = {}
-    try {
-      input = JSON.parse(tc.arguments)
-    } catch {
-      // keep empty object
-    }
-    content.push({ type: 'tool_use', id: tc.id, name: tc.name, input })
-  }
-
-  if (content.length === 0) {
-    content.push({ type: 'text', text: '' })
-  }
-
-  return {
-    id: res.id || 'msg_unknown',
-    type: 'message',
-    role: 'assistant',
-    content,
-    model: res.model || 'unknown',
-    stop_reason: toolCalls.length > 0 ? 'tool_use' : 'end_turn',
-    usage: {
-      input_tokens: res.usage?.input_tokens || 0,
-      output_tokens: res.usage?.output_tokens || 0,
-    },
-  }
+  return runtime.openAIToAnthropic(res) as AnthropicResponse
 }
 
 // ---------------------- 流式响应转换 ----------------------
@@ -187,9 +162,7 @@ export function* openAIStreamToAnthropic(chunks: string[]): Generator<string> {
       messageId = resp.id || messageId
       model = resp.model || model
       yield* emitMessageStart()
-    }
-
-    else if (eventName === 'response.output_text.delta') {
+    } else if (eventName === 'response.output_text.delta') {
       const delta = (payload as any).delta || ''
       if (delta) {
         if (!messageStarted) yield* emitMessageStart()
@@ -207,9 +180,7 @@ export function* openAIStreamToAnthropic(chunks: string[]): Generator<string> {
           delta: { type: 'text_delta', text: delta },
         })
       }
-    }
-
-    else if (eventName === 'response.output_item.done') {
+    } else if (eventName === 'response.output_item.done') {
       const item = (payload as any).item || {}
       if (item.type === 'function_call' || item.type === 'tool_call') {
         toolCalls.push({
@@ -220,16 +191,12 @@ export function* openAIStreamToAnthropic(chunks: string[]): Generator<string> {
             : JSON.stringify(item.input || {}),
         })
       }
-    }
-
-    else if (eventName === 'response.completed') {
+    } else if (eventName === 'response.completed') {
       const resp = (payload as any).response || {}
       messageId = resp.id || messageId
       model = resp.model || model
       const output = resp.output || []
-      const usage = resp.usage || {}
 
-      // 补充提取
       const extractedText = extractTextFromOutput(output)
       const extractedTools = extractToolCalls(output)
 
@@ -254,7 +221,6 @@ export function* openAIStreamToAnthropic(chunks: string[]): Generator<string> {
     }
   }
 
-  // 结束文本块
   if (textBlockStarted) {
     yield emitEvent('content_block_stop', {
       type: 'content_block_stop',
@@ -262,7 +228,6 @@ export function* openAIStreamToAnthropic(chunks: string[]): Generator<string> {
     })
   }
 
-  // 工具调用块
   let nextIndex = textBlockStarted ? textBlockIndex + 1 : 0
   if (toolCalls.length > 0 && !messageStarted) {
     yield* emitMessageStart()
@@ -286,7 +251,6 @@ export function* openAIStreamToAnthropic(chunks: string[]): Generator<string> {
     nextIndex++
   }
 
-  // 消息结束
   const stopReason = toolCalls.length > 0 ? 'tool_use' : 'end_turn'
   if (messageStarted) {
     yield emitEvent('message_delta', {

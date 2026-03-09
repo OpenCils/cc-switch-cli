@@ -1,17 +1,18 @@
 /**
  * [INPUT]: 依赖所有 screens、store 与 ato 生命周期管理，依赖 ink 的 render/useApp/useInput，依赖 updater 的版本检测与自更新
- * [OUTPUT]: App 根组件 + 程序入口
- * [POS]: src/ 的顶层路由控制器，负责三屏导航、退出前的 ATO 保留/关闭确认，以及首页更新状态
+ * [OUTPUT]: App 根组件、程序入口，以及编译态 ATO 子进程入口
+ * [POS]: src/ 的顶层路由控制器，负责三屏导航、退出前的 ATO 保留/关闭确认、首页更新状态与编译态 ATO 自举
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 
 import React, { useState, useEffect } from 'react'
+import { parseArgs } from 'util'
 import { render, useApp, useInput } from 'ink'
 import type { AppStore, Installation, ProviderConfig } from './types.js'
 import { instKey } from './types.js'
 import { detectInstallations } from './store/detect.js'
 import { loadStore, saveStore } from './store/local.js'
-import { getAtoStatus, stopAto } from './ato/index.js'
+import { getAtoStatus, startAtoProcess, stopAto } from './ato/index.js'
 import { ProviderSelect } from './screens/ProviderSelect.js'
 import { ProviderList } from './screens/ProviderList.js'
 import { ProviderForm } from './screens/ProviderForm.js'
@@ -68,6 +69,52 @@ function collectAtoTargets(store: AppStore, installations: Installation[]): AtoE
   }
 
   return targets.sort((a, b) => a.label.localeCompare(b.label))
+}
+
+function readStringArg(value: string | boolean | undefined): string {
+  return typeof value === 'string' ? value : ''
+}
+
+function maybeRunAtoChildProcess(): boolean {
+  if (!process.argv.includes('--ato-child')) {
+    return false
+  }
+
+  const { values } = parseArgs({
+    options: {
+      'ato-child': { type: 'boolean' },
+      port: { type: 'string', short: 'p' },
+      upstream: { type: 'string', short: 'u' },
+      key: { type: 'string', short: 'k' },
+    },
+    strict: false,
+    allowPositionals: true,
+  })
+
+  const portArg = readStringArg(values.port)
+  const upstreamArg = readStringArg(values.upstream)
+  const keyArg = readStringArg(values.key)
+  const port = Number.parseInt(portArg || process.env.ATO_PORT || '18653', 10)
+  const upstreamUrl = upstreamArg || process.env.ATO_UPSTREAM_URL || ''
+  const upstreamKey = keyArg || process.env.ATO_UPSTREAM_KEY || ''
+
+  if (!upstreamUrl) {
+    console.error('[ATO] Error: upstream URL is required')
+    process.exit(1)
+  }
+
+  if (Number.isNaN(port) || port <= 0) {
+    console.error(`[ATO] Error: invalid port ${portArg}`)
+    process.exit(1)
+  }
+
+  void startAtoProcess({ port, upstreamUrl, upstreamKey }).catch((error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error('[ATO] Error:', message)
+    process.exit(1)
+  })
+
+  return true
 }
 
 // ---------------------- 根组件 ----------------------
@@ -246,4 +293,6 @@ function App() {
 }
 
 // ---------------------- 启动 ----------------------
-render(<App />, { exitOnCtrlC: false })
+if (!maybeRunAtoChildProcess()) {
+  render(<App />, { exitOnCtrlC: false })
+}
