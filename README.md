@@ -1,24 +1,39 @@
 <div align="center">
 
-**English | [中文](./README.zh.md) | [日本語](./README.ja.md) | [한국어](./README.ko.md)**
+# CC Switch CLI
+
+**Switch models, providers, and environments for Claude Code, Codex, Gemini, and OpenClaw — all from one terminal.**
+
+<img src="./preview.png" alt="CC Switch CLI terminal preview" width="100%" />
 
 </div>
+
+## Install
+
+**WSL / Linux / macOS**
+```bash
+curl -fsSL https://raw.githubusercontent.com/OpenCils/cc-switch-cli/main/install.sh | bash
+```
+
+**Windows (PowerShell)**
+```powershell
+irm https://raw.githubusercontent.com/OpenCils/cc-switch-cli/main/install.ps1 | iex
+```
+
+After installation, type `cc` in any terminal to launch.
+
+---
 
 <div align="center">
-  <img src="./preview.png" alt="CC Switch CLI terminal preview" width="100%" />
-  <h1>CC Switch CLI</h1>
-  <p>Switch models, providers, and environments for Claude Code, Codex, Gemini, and OpenClaw — all from one terminal.</p>
-  <p>
-    <img alt="Node.js" src="https://img.shields.io/badge/Node.js-20%2B-2f6f44?style=for-the-badge&logo=node.js&logoColor=white">
-    <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5.9-2f5d95?style=for-the-badge&logo=typescript&logoColor=white">
-    <img alt="Ink" src="https://img.shields.io/badge/Ink-6.8-24292f?style=for-the-badge">
-    <img alt="TUI" src="https://img.shields.io/badge/Interface-Terminal_UI-a56a17?style=for-the-badge">
-  </p>
-</div>
 
-<p align="center">
-  Not another config file editor. It detects your installations first, then lets you switch providers by tool and environment — spinning up the ATO proxy automatically when needed.
-</p>
+**[English](./README.md) | [中文](./README.zh.md) | [日本語](./README.ja.md) | [한국어](./README.ko.md)**
+
+<img alt="Node.js" src="https://img.shields.io/badge/Node.js-20%2B-2f6f44?style=for-the-badge&logo=node.js&logoColor=white">
+<img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5.9-2f5d95?style=for-the-badge&logo=typescript&logoColor=white">
+<img alt="Ink" src="https://img.shields.io/badge/Ink-6.8-24292f?style=for-the-badge">
+<img alt="TUI" src="https://img.shields.io/badge/Interface-Terminal_UI-a56a17?style=for-the-badge">
+
+</div>
 
 ## What it does
 
@@ -41,31 +56,6 @@ When you're juggling multiple AI coding tools, the pain isn't the models themsel
 | Provider management | Store multiple provider configs per installation, track the active one |
 | ATO proxy | Bridges Claude Code to OpenAI-compatible APIs — auto start/stop, port conflict avoidance, background persistence |
 | Exit governance | Explicitly choose to keep ATO running in the background or shut it down on exit |
-
-## Installation
-
-### WSL / Linux / macOS
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/OpenCils/cc-switch-cli/main/install.sh | bash
-```
-
-### Windows (PowerShell)
-
-```powershell
-irm https://raw.githubusercontent.com/OpenCils/cc-switch-cli/main/install.ps1 | iex
-```
-
-After installation, type `cc` in any terminal to launch. Reopen your terminal or run `source ~/.bashrc` to pick up the PATH update.
-
-### Run from source (developers)
-
-```bash
-git clone https://github.com/OpenCils/cc-switch-cli.git
-cd cc-switch-cli
-npm install
-npm start
-```
 
 ## Usage
 
@@ -107,12 +97,14 @@ Default port is `18653`. If that port is occupied, CC Switch scans for the next 
 | Tool-native config files | Written on provider activation |
 | `~/.cc-switch-ato/` | ATO process records |
 
-## Who it's for
+## Run from source
 
-- Developers juggling multiple AI coding CLIs who need to switch models frequently
-- Windows + WSL hybrid workflow users
-- Anyone who wants to connect Claude Code to an OpenAI-compatible model
-- People tired of editing config files by hand
+```bash
+git clone https://github.com/OpenCils/cc-switch-cli.git
+cd cc-switch-cli
+npm install
+npm start
+```
 
 ## Status
 
