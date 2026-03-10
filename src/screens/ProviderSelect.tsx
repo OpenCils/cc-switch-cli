@@ -8,43 +8,28 @@
 import React, { useState } from 'react'
 import { Box, Text, useInput } from 'ink'
 import { Banner } from '../components/Banner.js'
-import { TOOLS, type Installation } from '../types.js'
+import { TOOLS, type Installation, type AppStore, instKey } from '../types.js'
 import { t } from '../i18n/index.js'
 
 interface Props {
   installations: Installation[]
+  store: AppStore
   currentVersion: string
   onSelect: (inst: Installation) => void
   onExitRequest: () => void
-  onUpdateRequest?: () => void
-  updateAvailable?: string | null
-  installCmd?: string
-  canSelfUpdate?: boolean
-  updating?: boolean
-  updateError?: string | null
 }
 
 export function ProviderSelect({
   installations,
+  store,
   currentVersion,
   onSelect,
   onExitRequest,
-  onUpdateRequest,
-  updateAvailable,
-  installCmd,
-  canSelfUpdate = false,
-  updating = false,
-  updateError,
 }: Props) {
   const [cursor, setCursor] = useState(0)
   const items = installations
 
   useInput((ch, k) => {
-    if (updating) return
-    if (updateAvailable && canSelfUpdate && ch.toLowerCase() === 'u' && onUpdateRequest) {
-      onUpdateRequest()
-      return
-    }
     if (ch === 'q' || k.escape) return onExitRequest()
     if (items.length === 0) return
     if (k.upArrow) return setCursor(i => (i - 1 + items.length) % items.length)
@@ -71,6 +56,12 @@ export function ProviderSelect({
             const active = i === cursor
             const meta = TOOLS.find(tool => tool.id === inst.tool)!
             const envTag = `[${inst.env.label}]`
+            // 从 store 获取当前激活的供应商模型
+            const key = instKey(inst)
+            const activeProviderId = store.active[key]
+            const providers = store.providers[key] ?? []
+            const activeProvider = providers.find(p => p.id === activeProviderId)
+            const displayModel = activeProvider?.model ?? inst.current.model
             return (
               <Box key={`${inst.tool}-${inst.env.type}-${inst.env.distro ?? 'native'}`} paddingX={1} gap={1}>
                 <Text color={active ? meta.color : 'gray'} bold={active}>
@@ -82,7 +73,7 @@ export function ProviderSelect({
                 <Text color={active ? 'white' : 'gray'} dimColor={!active}>
                   {envTag}
                 </Text>
-                <Text dimColor>{inst.current.model}</Text>
+                <Text dimColor>{displayModel}</Text>
               </Box>
             )
           })}
@@ -93,25 +84,6 @@ export function ProviderSelect({
       <Box marginTop={1}>
         <Text dimColor>{t('hintSelect')}</Text>
       </Box>
-
-      {/* ---- 更新提示横幅 ---- */}
-      {updateAvailable && (
-        <Box flexDirection="column" marginTop={1}>
-          <Text color="yellow">{t('updateAvailableMsg', { current: currentVersion, version: updateAvailable })}</Text>
-          {updating ? (
-            <Text color="cyan">{t('updateStarting')}</Text>
-          ) : updateError ? (
-            <Text color="red">{t('updateStartFailed', { error: updateError })}</Text>
-          ) : canSelfUpdate ? (
-            <Text dimColor>{t('updateHotkeyHint')}</Text>
-          ) : installCmd ? (
-            <Text dimColor>{t('updateInstallHint')} {installCmd}</Text>
-          ) : null}
-          {canSelfUpdate && installCmd && !updating && (
-            <Text dimColor>{t('updateManualHint')} {installCmd}</Text>
-          )}
-        </Box>
-      )}
     </Box>
   )
 }

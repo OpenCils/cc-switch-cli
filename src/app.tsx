@@ -18,6 +18,7 @@ import { ProviderList } from './screens/ProviderList.js'
 import { ProviderForm } from './screens/ProviderForm.js'
 import { ExitConfirm } from './screens/ExitConfirm.js'
 import { LanguageSelect } from './screens/LanguageSelect.js'
+import { UpdateConfirm } from './screens/UpdateConfirm.js'
 import { setLang, t, type Lang } from './i18n/index.js'
 import { CURRENT_VERSION, canSelfUpdate, checkForUpdates, getInstallCommand, startSelfUpdate } from './updater.js'
 
@@ -128,32 +129,31 @@ function App() {
   })
   const [screen, setScreen] = useState<Screen>({ name: 'select' })
   const [exitDialog, setExitDialog] = useState<ExitDialogState | null>(null)
+
+  // ---- 更新检测状态 ----
+  const [updateChecking, setUpdateChecking] = useState(true)
   const [updateAvailable, setUpdateAvailable] = useState<string | null>(null)
   const [updateError, setUpdateError] = useState<string | null>(null)
   const [updating, setUpdating] = useState(false)
+  const [updateSkipped, setUpdateSkipped] = useState(false)
 
-  // ---- 启动后台更新检测，不阻塞 UI ----
+  // ---- 启动时检测更新 ----
   useEffect(() => {
     let cancelled = false
 
-    void checkForUpdates(store).then(({ version, didCheck, checkedAt }) => {
+    void checkForUpdates(store).then(({ version }) => {
       if (cancelled) return
-
-      setUpdateAvailable(version)
-      setStore(prev => {
-        const prevVersion = prev.updateAvailable ?? null
-        if (!didCheck && prevVersion === version) {
-          return prev
-        }
-
-        const next = {
-          ...prev,
-          lastUpdateCheck: checkedAt,
-          updateAvailable: version ?? undefined,
-        }
-        saveStore(next)
-        return next
-      })
+      setUpdateChecking(false)
+      if (version) {
+        setUpdateAvailable(version)
+      } else {
+        // 无更新时清除缓存
+        setStore(prev => {
+          const next = { ...prev, updateAvailable: undefined }
+          saveStore(next)
+          return next
+        })
+      }
     })
 
     return () => {
@@ -177,7 +177,7 @@ function App() {
   }
 
   async function handleUpdateRequest() {
-    if (!updateAvailable || updating) return
+    if (updating) return
 
     setUpdating(true)
     setUpdateError(null)
@@ -232,10 +232,12 @@ function App() {
     }
   })
 
+  // ---- 语言选择 ----
   if (!store.language) {
     return <LanguageSelect onSelect={handleLanguageSelect} />
   }
 
+  // ---- 退出确认 ----
   if (exitDialog) {
     return (
       <ExitConfirm
@@ -249,19 +251,31 @@ function App() {
     )
   }
 
+  // ---- 更新确认（检测到更新且用户未跳过）----
+  if (updateAvailable && !updateSkipped) {
+    return (
+      <UpdateConfirm
+        currentVersion={CURRENT_VERSION}
+        newVersion={updateAvailable}
+        canSelfUpdate={canSelfUpdate()}
+        installCmd={getInstallCommand()}
+        updating={updating}
+        error={updateError}
+        onUpdate={() => void handleUpdateRequest()}
+        onSkip={() => setUpdateSkipped(true)}
+      />
+    )
+  }
+
+  // ---- 主界面 ----
   if (screen.name === 'select') {
     return (
       <ProviderSelect
         installations={installations}
+        store={store}
         currentVersion={CURRENT_VERSION}
-        updateAvailable={updateAvailable}
-        installCmd={getInstallCommand()}
-        canSelfUpdate={canSelfUpdate()}
-        updateError={updateError}
-        updating={updating}
         onSelect={inst => setScreen({ name: 'provider-list', installation: inst })}
         onExitRequest={requestExit}
-        onUpdateRequest={() => void handleUpdateRequest()}
       />
     )
   }
