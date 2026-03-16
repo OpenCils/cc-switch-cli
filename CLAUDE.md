@@ -20,7 +20,7 @@ src/              - 源码根目录
   version.ts      - 版本常量 VERSION，CI 编译前自动注入 tag 版本号
   updater.ts      - 更新模块：查 GitHub Releases API、归一化版本号、纠正升级后的缓存状态，并启动独立二进制自更新
   components/     - 通用组件
-    Banner.tsx    - figlet ANSI Shadow 大字 ASCII art，进入首屏时显示
+    Banner.tsx    - 首屏顶部品牌字标，按终端宽度在大字 / 小字 / 纯文本间切换，避免窄窗口 ASCII 断裂
   screens/        - 四个屏幕组件
     ProviderSelect.tsx - 入口屏：Banner + 检测到的所有安装实例列表
     ProviderList.tsx   - 供应商列表：展示/激活/删除/跳转添加，ATO 模式默认走 18653，端口被占用时自动顺延空闲端口并回写存储
@@ -83,11 +83,10 @@ bin/
 - `tsx` — TypeScript 直接运行
 
 ## 变更日志
+- v1.2.10  交互修复：顶部 Banner 按终端宽度自动切到紧凑字标，避免窄窗口 ASCII 断裂；同步统一发布版本号来源
 - v1.2.6  发布修复：GitHub Actions 改为稳定注入 tag 版本，避免产物出现 当前版本: vundefined
 - v1.2.5  修复尝试：补上版本归一化与发布注入，但 Actions 中的 heredoc 脚本失败，未生成有效产物
 - v1.2.4  体验修复：首屏显示当前版本，加入一键自更新 u，并清理升级后仍提示更新的缓存误判
 - v1.2.3  ATO 修复：递归规范化 tool schema，补齐 object/properties，避免上游 400 invalid_function_parameters
 - v2.0.0  架构重构：多环境检测（Windows + WSL），工具配置适配器，直接编辑安装实例配置
 - v1.0.0  初始实现：四提供商选择、模型增删改激活、ASCII banner
-
-
