@@ -1,7 +1,7 @@
 /**
  * [INPUT]: 依赖 node:https/child_process/fs/os/path，依赖 types 的 AppStore，依赖 version 的 VERSION
- * [OUTPUT]: 对外提供 CURRENT_VERSION、checkForUpdates(store)、getInstallCommand()、canSelfUpdate()、startSelfUpdate()
- * [POS]: src/ 的更新模块，负责 GitHub Release 检测、缓存纠偏、版本归一化与独立二进制自更新
+ * [OUTPUT]: 对外提供 CURRENT_VERSION、checkForUpdates(store)、getInstallCommand()、canSelfUpdate()、SelfUpdateProgress 类型、startSelfUpdate()
+ * [POS]: src/ 的更新模块，负责 GitHub Release 检测、缓存纠偏、版本归一化与带进度回调的独立二进制自更新
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 
@@ -47,6 +47,9 @@ function normalizeCachedUpdate(version?: string): string | null {
 }
 
 export const CURRENT_VERSION = normalizeVersion(VERSION) ?? 'unknown'
+const MAX_REDIRECTS = 5
+const DOWNLOAD_PROGRESS_STEP = 512 * 1024
+const DOWNLOAD_PROGRESS_INTERVAL_MS = 120
 
 // ---------------------- 请求 GitHub API ----------------------
 function fetchLatest(): Promise<string | null> {
@@ -130,27 +133,125 @@ function quoteForPowerShell(value: string): string {
   return `'${value.replace(/'/g, "''")}'`
 }
 
-function quoteForShell(value: string): string {
-  return `'${value.replace(/'/g, `'"'"'`)}'`
+function removeIfExists(filePath: string): void {
+  try {
+    fs.unlinkSync(filePath)
+  } catch {}
 }
 
-function startWindowsSelfUpdate(targetPath: string, downloadUrl: string): void {
+function downloadAsset(
+  downloadUrl: string,
+  destinationPath: string,
+  onProgress?: StartSelfUpdateOptions['onProgress'],
+  redirects = 0,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    removeIfExists(destinationPath)
+
+    const file = fs.createWriteStream(destinationPath)
+    let settled = false
+
+    const fail = (error: Error) => {
+      if (settled) return
+      settled = true
+      file.destroy()
+      removeIfExists(destinationPath)
+      reject(error)
+    }
+
+    const req = https.get(
+      downloadUrl,
+      { headers: { 'User-Agent': 'cc-switch-cli', Accept: 'application/octet-stream' } },
+      res => {
+        const status = res.statusCode ?? 0
+
+        if (status >= 300 && status < 400 && res.headers.location) {
+          if (redirects >= MAX_REDIRECTS) {
+            res.resume()
+            fail(new Error('too many redirects while downloading update'))
+            return
+          }
+
+          const nextUrl = new URL(res.headers.location, downloadUrl).toString()
+          res.resume()
+          file.close(closeError => {
+            if (closeError) {
+              fail(closeError)
+              return
+            }
+
+            downloadAsset(nextUrl, destinationPath, onProgress, redirects + 1).then(resolve).catch(reject)
+          })
+          return
+        }
+
+        if (status !== 200) {
+          res.resume()
+          fail(new Error(`download failed: HTTP ${status}`))
+          return
+        }
+
+        const totalBytes = normalizeContentLength(res.headers['content-length'])
+        let downloadedBytes = 0
+        let lastReportedBytes = -1
+        let lastReportedAt = 0
+
+        reportDownloadProgress(onProgress, 0, totalBytes)
+        lastReportedBytes = 0
+        lastReportedAt = Date.now()
+
+        res.on('data', chunk => {
+          downloadedBytes += chunk.length
+          if (!shouldReportDownloadProgress(downloadedBytes, lastReportedBytes, lastReportedAt, totalBytes)) {
+            return
+          }
+
+          reportDownloadProgress(onProgress, downloadedBytes, totalBytes)
+          lastReportedBytes = downloadedBytes
+          lastReportedAt = Date.now()
+        })
+        res.on('error', error => fail(error))
+        res.pipe(file)
+        file.on('finish', () => {
+          file.close(closeError => {
+            if (settled) return
+            if (closeError) {
+              fail(closeError)
+              return
+            }
+
+            if (downloadedBytes !== lastReportedBytes) {
+              reportDownloadProgress(onProgress, downloadedBytes, totalBytes)
+            }
+            settled = true
+            resolve()
+          })
+        })
+      },
+    )
+
+    req.on('error', error => fail(error))
+    req.setTimeout(30_000, () => req.destroy(new Error('download timed out')))
+    file.on('error', error => fail(error))
+  })
+}
+
+function startWindowsSelfUpdate(targetPath: string, preparedPath: string): void {
   const scriptPath = path.join(os.tmpdir(), `cc-switch-update-${process.pid}.ps1`)
-  const tempPath = path.join(os.tmpdir(), `cc-switch-update-${process.pid}.tmp`)
   const script = [
     "$ErrorActionPreference = 'Stop'",
     `$PidToWait = ${process.pid}`,
     `$TargetPath = ${quoteForPowerShell(targetPath)}`,
-    `$DownloadUrl = ${quoteForPowerShell(downloadUrl)}`,
-    `$TempPath = ${quoteForPowerShell(tempPath)}`,
+    `$PreparedPath = ${quoteForPowerShell(preparedPath)}`,
+    `$ScriptPath = ${quoteForPowerShell(scriptPath)}`,
     '',
     'for ($i = 0; $i -lt 240; $i++) {',
     '  if (-not (Get-Process -Id $PidToWait -ErrorAction SilentlyContinue)) { break }',
     '  Start-Sleep -Milliseconds 500',
     '}',
-    'Invoke-WebRequest -UseBasicParsing -Uri $DownloadUrl -OutFile $TempPath',
-    'Copy-Item -Path $TempPath -Destination $TargetPath -Force',
-    'Remove-Item -Path $TempPath -Force -ErrorAction SilentlyContinue',
+    'Copy-Item -Path $PreparedPath -Destination $TargetPath -Force',
+    'Remove-Item -Path $PreparedPath -Force -ErrorAction SilentlyContinue',
+    'Remove-Item -Path $ScriptPath -Force -ErrorAction SilentlyContinue',
   ].join('\n')
 
   fs.writeFileSync(scriptPath, script, { encoding: 'utf-8' })
@@ -161,30 +262,9 @@ function startWindowsSelfUpdate(targetPath: string, downloadUrl: string): void {
   child.unref()
 }
 
-function startUnixSelfUpdate(targetPath: string, downloadUrl: string): void {
-  const scriptPath = path.join(os.tmpdir(), `cc-switch-update-${process.pid}.sh`)
-  const tempPath = `${targetPath}.tmp.${process.pid}`
-  const script = [
-    '#!/usr/bin/env bash',
-    'set -euo pipefail',
-    `pid=${process.pid}`,
-    `target=${quoteForShell(targetPath)}`,
-    `download_url=${quoteForShell(downloadUrl)}`,
-    `temp_path=${quoteForShell(tempPath)}`,
-    '',
-    'for _ in $(seq 1 240); do',
-    '  if ! kill -0 "$pid" 2>/dev/null; then break; fi',
-    '  sleep 0.5',
-    'done',
-    'curl -fsSL "$download_url" -o "$temp_path"',
-    'chmod +x "$temp_path"',
-    'mv "$temp_path" "$target"',
-  ].join('\n')
-
-  fs.writeFileSync(scriptPath, script, { encoding: 'utf-8' })
-  fs.chmodSync(scriptPath, 0o755)
-  const child = spawn('bash', [scriptPath], { detached: true, stdio: 'ignore' })
-  child.unref()
+function finishUnixSelfUpdate(targetPath: string, preparedPath: string): void {
+  fs.chmodSync(preparedPath, 0o755)
+  fs.renameSync(preparedPath, targetPath)
 }
 
 export interface SelfUpdateResult {
@@ -192,7 +272,54 @@ export interface SelfUpdateResult {
   error?: string
 }
 
-export async function startSelfUpdate(): Promise<SelfUpdateResult> {
+export type SelfUpdatePhase = 'preparing' | 'downloading' | 'replacing' | 'complete'
+
+export interface SelfUpdateProgress {
+  phase: SelfUpdatePhase
+  downloadedBytes?: number
+  totalBytes?: number
+}
+
+interface StartSelfUpdateOptions {
+  onProgress?: (progress: SelfUpdateProgress) => void
+}
+
+function emitProgress(onProgress: StartSelfUpdateOptions['onProgress'], progress: SelfUpdateProgress): void {
+  onProgress?.(progress)
+}
+
+function normalizeContentLength(value: string | string[] | undefined): number | undefined {
+  const raw = Array.isArray(value) ? value[0] : value
+  const parsed = Number.parseInt(raw ?? '', 10)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined
+}
+
+function shouldReportDownloadProgress(
+  downloadedBytes: number,
+  lastReportedBytes: number,
+  lastReportedAt: number,
+  totalBytes: number | undefined,
+): boolean {
+  if (downloadedBytes === 0) return true
+  if (totalBytes && downloadedBytes >= totalBytes) return true
+  if ((downloadedBytes - lastReportedBytes) >= DOWNLOAD_PROGRESS_STEP) return true
+  return (Date.now() - lastReportedAt) >= DOWNLOAD_PROGRESS_INTERVAL_MS
+}
+
+function reportDownloadProgress(
+  onProgress: StartSelfUpdateOptions['onProgress'],
+  downloadedBytes: number,
+  totalBytes: number | undefined,
+): void {
+  emitProgress(onProgress, {
+    phase: 'downloading',
+    downloadedBytes,
+    totalBytes,
+  })
+}
+
+async function startSelfUpdate(options: StartSelfUpdateOptions = {}): Promise<SelfUpdateResult> {
+  const { onProgress } = options
   if (!canSelfUpdate()) {
     return { started: false, error: 'self-update unavailable in source mode or on this platform' }
   }
@@ -204,18 +331,28 @@ export async function startSelfUpdate(): Promise<SelfUpdateResult> {
 
   const targetPath = process.execPath
   const downloadUrl = `https://github.com/${REPO}/releases/latest/download/${assetName}`
+  const preparedPath = `${targetPath}.tmp.${process.pid}`
 
   try {
+    emitProgress(onProgress, { phase: 'preparing' })
+    await downloadAsset(downloadUrl, preparedPath, onProgress)
+
+    emitProgress(onProgress, { phase: 'replacing' })
     if (process.platform === 'win32') {
-      startWindowsSelfUpdate(targetPath, downloadUrl)
+      startWindowsSelfUpdate(targetPath, preparedPath)
     } else {
-      startUnixSelfUpdate(targetPath, downloadUrl)
+      finishUnixSelfUpdate(targetPath, preparedPath)
     }
+
+    emitProgress(onProgress, { phase: 'complete' })
     return { started: true }
   } catch (error) {
+    removeIfExists(preparedPath)
     return {
       started: false,
       error: error instanceof Error ? error.message : String(error),
     }
   }
 }
+
+export { startSelfUpdate }

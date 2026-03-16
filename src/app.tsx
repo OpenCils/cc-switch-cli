@@ -1,5 +1,5 @@
 /**
- * [INPUT]: 依赖所有 screens、store 与 ato 生命周期管理，依赖 ink 的 render/useApp/useInput，依赖 updater 的版本检测与自更新
+ * [INPUT]: 依赖所有 screens、store 与 ato 生命周期管理，依赖 ink 的 render/useApp/useInput，依赖 updater 的版本检测、自更新与进度回调
  * [OUTPUT]: App 根组件、程序入口，以及编译态 ATO 子进程入口
  * [POS]: src/ 的顶层路由控制器，负责三屏导航、退出前的 ATO 保留/关闭确认、首页更新状态与编译态 ATO 自举
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
@@ -20,7 +20,14 @@ import { ExitConfirm } from './screens/ExitConfirm.js'
 import { LanguageSelect } from './screens/LanguageSelect.js'
 import { UpdateConfirm } from './screens/UpdateConfirm.js'
 import { setLang, t, type Lang } from './i18n/index.js'
-import { CURRENT_VERSION, canSelfUpdate, checkForUpdates, getInstallCommand, startSelfUpdate } from './updater.js'
+import {
+  CURRENT_VERSION,
+  canSelfUpdate,
+  checkForUpdates,
+  getInstallCommand,
+  startSelfUpdate,
+  type SelfUpdateProgress,
+} from './updater.js'
 
 // ---------------------- 路由类型 ----------------------
 type Screen =
@@ -40,6 +47,8 @@ interface ExitDialogState {
   message?: string
   targets: AtoExitTarget[]
 }
+
+const UPDATE_EXIT_DELAY_MS = 900
 
 function collectAtoTargets(store: AppStore, installations: Installation[]): AtoExitTarget[] {
   const installationMap = new Map(installations.map(inst => [instKey(inst), inst]))
@@ -134,6 +143,7 @@ function App() {
   const [updateChecking, setUpdateChecking] = useState(true)
   const [updateAvailable, setUpdateAvailable] = useState<string | null>(null)
   const [updateError, setUpdateError] = useState<string | null>(null)
+  const [updateProgress, setUpdateProgress] = useState<SelfUpdateProgress | null>(null)
   const [updating, setUpdating] = useState(false)
   const [updateSkipped, setUpdateSkipped] = useState(false)
 
@@ -181,14 +191,21 @@ function App() {
 
     setUpdating(true)
     setUpdateError(null)
+    setUpdateProgress({ phase: 'preparing' })
 
-    const result = await startSelfUpdate()
+    const result = await startSelfUpdate({
+      onProgress: progress => {
+        setUpdateProgress(progress)
+      },
+    })
     if (!result.started) {
       setUpdating(false)
+      setUpdateProgress(null)
       setUpdateError(result.error ?? 'unknown error')
       return
     }
 
+    await new Promise(resolve => setTimeout(resolve, UPDATE_EXIT_DELAY_MS))
     exit()
   }
 
@@ -260,6 +277,7 @@ function App() {
         canSelfUpdate={canSelfUpdate()}
         installCmd={getInstallCommand()}
         updating={updating}
+        progress={updateProgress}
         error={updateError}
         onUpdate={() => void handleUpdateRequest()}
         onSkip={() => setUpdateSkipped(true)}

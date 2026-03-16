@@ -18,7 +18,7 @@ src/              - 源码根目录
   app.tsx         - 根组件 + 三屏路由状态机，外加退出前的 ATO 保留/关闭确认，启动后台更新检测与自更新入口
   types.ts        - 类型定义：Tool、Environment、Installation、ProviderConfig、AppStore、TOOLS
   version.ts      - 版本常量 VERSION，CI 编译前自动注入 tag 版本号
-  updater.ts      - 更新模块：查 GitHub Releases API、归一化版本号、纠正升级后的缓存状态，并启动独立二进制自更新
+  updater.ts      - 更新模块：查 GitHub Releases API、归一化版本号、纠正升级后的缓存状态，并在自更新时回传阶段与下载进度
   components/     - 通用组件
     Banner.tsx    - 首屏顶部品牌字标，按终端宽度在大字 / 小字 / 纯文本间切换，避免窄窗口 ASCII 断裂
   screens/        - 四个屏幕组件
@@ -83,6 +83,7 @@ bin/
 - `tsx` — TypeScript 直接运行
 
 ## 变更日志
+- v1.2.11  更新体验修复：更新确认页展示准备/下载/替换阶段与下载进度，完成后短暂停留再退出；Linux/macOS 前台下载后原地替换，避免“确认后直接弹出”却看不见过程
 - v1.2.10  交互修复：顶部 Banner 按终端宽度自动切到紧凑字标，避免窄窗口 ASCII 断裂；同步统一发布版本号来源
 - v1.2.6  发布修复：GitHub Actions 改为稳定注入 tag 版本，避免产物出现 当前版本: vundefined
 - v1.2.5  修复尝试：补上版本归一化与发布注入，但 Actions 中的 heredoc 脚本失败，未生成有效产物

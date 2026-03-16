@@ -1,13 +1,14 @@
 /**
- * [INPUT]: 依赖 ink 的 Box/Text/useInput，依赖更新相关回调
+ * [INPUT]: 依赖 ink 的 Box/Text/useInput，依赖 updater 的进度类型，依赖更新相关回调
  * [OUTPUT]: 对外提供 UpdateConfirm 组件
- * [POS]: screens/ 的更新确认屏，启动时如有新版本则弹出询问用户
+ * [POS]: screens/ 的更新确认屏，启动时如有新版本则弹出询问用户并展示更新进度
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 
 import React, { useState } from 'react'
 import { Box, Text, useInput } from 'ink'
 import { t } from '../i18n/index.js'
+import type { SelfUpdateProgress } from '../updater.js'
 
 interface Props {
   currentVersion: string
@@ -17,7 +18,35 @@ interface Props {
   onUpdate: () => void
   onSkip: () => void
   updating?: boolean
+  progress?: SelfUpdateProgress | null
   error?: string | null
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
+}
+
+function buildProgressBar(percent: number): string {
+  const width = 24
+  const filled = Math.max(0, Math.min(width, Math.round((percent / 100) * width)))
+  return `[${'='.repeat(filled)}${'-'.repeat(width - filled)}]`
+}
+
+function getProgressTitle(progress: SelfUpdateProgress | null | undefined): string {
+  switch (progress?.phase) {
+    case 'downloading':
+      return t('updateDownloading')
+    case 'replacing':
+      return t('updateApplying')
+    case 'complete':
+      return t('updateComplete')
+    case 'preparing':
+    default:
+      return t('updatePreparing')
+  }
 }
 
 export function UpdateConfirm({
@@ -28,9 +57,15 @@ export function UpdateConfirm({
   onUpdate,
   onSkip,
   updating = false,
+  progress,
   error,
 }: Props) {
   const [cursor, setCursor] = useState(0)
+  const downloadedBytes = progress?.downloadedBytes
+  const totalBytes = progress?.totalBytes
+  const percent = downloadedBytes !== undefined && totalBytes
+    ? Math.min(100, Math.round((downloadedBytes / totalBytes) * 100))
+    : null
 
   const options = canSelfUpdate
     ? [
@@ -71,8 +106,29 @@ export function UpdateConfirm({
 
       {/* ---- 更新中状态 ---- */}
       {updating ? (
-        <Box marginBottom={1}>
-          <Text color="cyan">{t('updateStarting')}</Text>
+        <Box marginBottom={1} flexDirection="column">
+          <Text color="cyan">{getProgressTitle(progress)}</Text>
+          {progress?.phase === 'downloading' && downloadedBytes !== undefined && (
+            <>
+              <Text dimColor>
+                {totalBytes
+                  ? t('updateProgressKnown', {
+                      current: formatBytes(downloadedBytes),
+                      total: formatBytes(totalBytes),
+                      percent: percent ?? 0,
+                    })
+                  : t('updateProgressUnknown', {
+                      current: formatBytes(downloadedBytes),
+                    })}
+              </Text>
+              {percent !== null && (
+                <Text color="green">
+                  {buildProgressBar(percent)} {percent}%
+                </Text>
+              )}
+            </>
+          )}
+          <Text dimColor>{t('updateKeepOpen')}</Text>
         </Box>
       ) : (
         <>
