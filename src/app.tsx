@@ -151,18 +151,22 @@ function App() {
   useEffect(() => {
     let cancelled = false
 
-    void checkForUpdates(store).then(({ version }) => {
+    void checkForUpdates(store).then(({ version, checkedAt }) => {
       if (cancelled) return
       setUpdateChecking(false)
+
+      setStore(prev => {
+        const next = {
+          ...prev,
+          lastUpdateCheck: checkedAt,
+          updateAvailable: version ?? undefined,
+        }
+        saveStore(next)
+        return next
+      })
+
       if (version) {
         setUpdateAvailable(version)
-      } else {
-        // 无更新时清除缓存
-        setStore(prev => {
-          const next = { ...prev, updateAvailable: undefined }
-          saveStore(next)
-          return next
-        })
       }
     })
 

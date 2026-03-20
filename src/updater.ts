@@ -51,8 +51,8 @@ const MAX_REDIRECTS = 5
 const DOWNLOAD_PROGRESS_STEP = 512 * 1024
 const DOWNLOAD_PROGRESS_INTERVAL_MS = 120
 
-// ---------------------- 请求 GitHub API ----------------------
-function fetchLatest(): Promise<string | null> {
+// ---------------------- 请求 GitHub Release ----------------------
+function fetchLatestViaApi(): Promise<string | null> {
   return new Promise(resolve => {
     const req = https.get(
       `https://api.github.com/repos/${REPO}/releases/latest`,
@@ -81,6 +81,45 @@ function fetchLatest(): Promise<string | null> {
       resolve(null)
     })
   })
+}
+
+function extractVersionFromLocation(location: string | undefined): string | null {
+  if (!location) return null
+
+  try {
+    const pathname = new URL(location, `https://github.com/${REPO}/releases/latest`).pathname
+    const match = pathname.match(/\/releases\/(?:tag|download)\/v?(\d+\.\d+\.\d+)(?:\/|$)/)
+    return normalizeVersion(match?.[1] ?? null)
+  } catch {
+    return null
+  }
+}
+
+function fetchLatestViaRedirect(): Promise<string | null> {
+  return new Promise(resolve => {
+    const req = https.get(
+      `https://github.com/${REPO}/releases/latest`,
+      { headers: { 'User-Agent': 'cc-switch-cli' } },
+      res => {
+        const version = extractVersionFromLocation(res.headers.location)
+        res.resume()
+        resolve(version)
+      },
+    )
+
+    req.on('error', () => resolve(null))
+    req.setTimeout(5000, () => {
+      req.destroy()
+      resolve(null)
+    })
+  })
+}
+
+async function fetchLatest(): Promise<string | null> {
+  const redirectVersion = await fetchLatestViaRedirect()
+  if (redirectVersion) return redirectVersion
+
+  return fetchLatestViaApi()
 }
 
 // ---------------------- 公开 API ----------------------
