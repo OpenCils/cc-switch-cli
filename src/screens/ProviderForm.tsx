@@ -1,5 +1,5 @@
 /**
- * [INPUT]: 依赖 ink/ink-text-input，依赖 types/store 的 AppStore 操作
+ * [INPUT]: 依赖 ink，依赖 components/StableTextInput，依赖 types/store 的 AppStore 操作
  * [OUTPUT]: 对外提供 ProviderForm 组件（添加 + 编辑两用）
  * [POS]: screens/ 的供应商表单屏幕，配置供应商的名称/模型/URL/Key，并在保存前校验长密钥完整性
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
@@ -7,9 +7,9 @@
 
 import React, { useState } from 'react'
 import { Box, Text, useInput } from 'ink'
-import TextInput from 'ink-text-input'
 import type { AppStore, Installation, ProviderConfig } from '../types.js'
 import { TOOLS, instKey } from '../types.js'
+import { StableTextInput } from '../components/StableTextInput.js'
 import { addProvider, updateProvider, saveStore, newId } from '../store/local.js'
 import { t } from '../i18n/index.js'
 
@@ -269,7 +269,7 @@ export function ProviderForm({ installation, store, editing, onStoreChange, onBa
               </Text>
               <Box paddingLeft={4} flexDirection="column">
                 {focused ? (
-                  <TextInput
+                  <StableTextInput
                     value={value}
                     placeholder={t(f.placeholderKey)}
                     mask={isSecret ? '*' : undefined}
