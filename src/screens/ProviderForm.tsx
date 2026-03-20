@@ -1,7 +1,7 @@
 /**
  * [INPUT]: 依赖 ink/ink-text-input，依赖 types/store 的 AppStore 操作
  * [OUTPUT]: 对外提供 ProviderForm 组件（添加 + 编辑两用）
- * [POS]: screens/ 的供应商表单屏幕，配置供应商的名称/模型/URL/Key
+ * [POS]: screens/ 的供应商表单屏幕，配置供应商的名称/模型/URL/Key，并在保存前校验长密钥完整性
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 
@@ -36,6 +36,39 @@ const ATO_FIELDS: FieldDef[] = [
   { key: 'atoApiKey',      labelKey: 'fieldAtoKey', placeholderKey: 'placeholderAtoKey', secret: true },
 ]
 
+type SecretFieldKey = 'apiKey' | 'atoApiKey'
+
+interface SecretConfirmState {
+  apiKey: boolean
+  atoApiKey: boolean
+}
+
+const SECRET_FIELD_LABELS: Record<SecretFieldKey, string> = {
+  apiKey: 'fieldApiKey',
+  atoApiKey: 'fieldAtoKey',
+}
+
+function isSecretFieldKey(key: FieldDef['key']): key is SecretFieldKey {
+  return key === 'apiKey' || key === 'atoApiKey'
+}
+
+function hasWhitespace(value: string): boolean {
+  return /\s/.test(value)
+}
+
+function summarizeSecret(value: string): string {
+  if (!value) return ''
+
+  if (value.length <= 8) {
+    return `***${value.slice(-2)} · len ${value.length}`
+  }
+
+  const head = value.slice(0, Math.min(10, value.length))
+  const tail = value.slice(-Math.min(8, Math.max(4, value.length - head.length)))
+
+  return `${head}...${tail} · len ${value.length}`
+}
+
 interface Props {
   installation: Installation
   store: AppStore
@@ -59,6 +92,12 @@ export function ProviderForm({ installation, store, editing, onStoreChange, onBa
     atoPort:        editing?.atoPort        ?? 18653,
   })
   const [useAto, setUseAto] = useState(editing?.useAto ?? false)
+  const [feedback, setFeedback] = useState('')
+  const [feedbackTone, setFeedbackTone] = useState<'info' | 'error'>('info')
+  const [pendingSecretConfirm, setPendingSecretConfirm] = useState<SecretConfirmState>({
+    apiKey: false,
+    atoApiKey: false,
+  })
 
   // 字段列表：基础 + ATO开关 + (ATO字段 或 直接字段)
   const allFields: (FieldDef | 'toggle')[] = [
@@ -70,18 +109,82 @@ export function ProviderForm({ installation, store, editing, onStoreChange, onBa
   const totalItems = allFields.length + 2  // 字段 + 保存 + 取消
   const [focusIdx, setFocusIdx] = useState(0)
 
+  function activeSecretKeys(): SecretFieldKey[] {
+    return useAto ? ['atoApiKey'] : ['apiKey']
+  }
+
+  function activeSecretSummary(): string {
+    return activeSecretKeys()
+      .map(key => {
+        const value = String(fields[key] ?? '').trim()
+        if (!value) return ''
+        return `${t(SECRET_FIELD_LABELS[key])}: ${summarizeSecret(value)}`
+      })
+      .filter(Boolean)
+      .join(' | ')
+  }
+
+  function validateSecrets(): string | null {
+    for (const key of activeSecretKeys()) {
+      const value = String(fields[key] ?? '')
+      if (!value) continue
+      if (hasWhitespace(value)) {
+        return t('secretWhitespaceError', { field: t(SECRET_FIELD_LABELS[key]) })
+      }
+    }
+
+    return null
+  }
+
+  function onFieldChange(key: FieldDef['key'], value: string) {
+    setFields(prev => ({ ...prev, [key]: value }))
+    setFeedback('')
+
+    if (isSecretFieldKey(key)) {
+      setPendingSecretConfirm(prev => ({ ...prev, [key]: true }))
+    }
+  }
+
+  function hasPendingActiveSecretConfirm(): boolean {
+    return activeSecretKeys().some(key => pendingSecretConfirm[key])
+  }
+
+  function clearPendingActiveSecretConfirm() {
+    setPendingSecretConfirm(prev => {
+      const next = { ...prev }
+      for (const key of activeSecretKeys()) {
+        next[key] = false
+      }
+      return next
+    })
+  }
+
   function submit() {
     if (!fields.name.trim() || !fields.model.trim()) return
 
+    const secretError = validateSecrets()
+    if (secretError) {
+      setFeedbackTone('error')
+      setFeedback(secretError)
+      return
+    }
+
+    if (hasPendingActiveSecretConfirm()) {
+      setFeedbackTone('info')
+      setFeedback(t('secretConfirmBeforeSave', { summary: activeSecretSummary() || '-' }))
+      clearPendingActiveSecretConfirm()
+      return
+    }
+
     const entry: ProviderConfig = {
       id: editing?.id ?? newId(),
-      name: fields.name,
-      model: fields.model,
-      baseUrl: useAto ? '' : fields.baseUrl,
-      apiKey: useAto ? '' : fields.apiKey,
+      name: fields.name.trim(),
+      model: fields.model.trim(),
+      baseUrl: useAto ? '' : fields.baseUrl.trim(),
+      apiKey: useAto ? '' : fields.apiKey.trim(),
       useAto,
-      atoUpstreamUrl: useAto ? fields.atoUpstreamUrl : undefined,
-      atoApiKey: useAto ? fields.atoApiKey : undefined,
+      atoUpstreamUrl: useAto ? String(fields.atoUpstreamUrl ?? '').trim() : undefined,
+      atoApiKey: useAto ? String(fields.atoApiKey ?? '').trim() : undefined,
       atoPort: useAto ? fields.atoPort : undefined,
     }
 
@@ -154,34 +257,49 @@ export function ProviderForm({ installation, store, editing, onStoreChange, onBa
           }
 
           const isSecret = f.secret
-          const value = fields[f.key] ?? ''
+          const value = String(fields[f.key] ?? '')
+          const trimmedValue = value.trim()
+          const secretSummary = isSecret ? summarizeSecret(trimmedValue) : ''
+          const secretWhitespace = isSecret ? hasWhitespace(value) : false
 
           return (
             <Box key={f.key} flexDirection="column">
               <Text color={focused ? meta.color : 'gray'} bold={focused}>
                 {focused ? '❯ ' : '  '}{t(f.labelKey)}
               </Text>
-              <Box paddingLeft={4}>
+              <Box paddingLeft={4} flexDirection="column">
                 {focused ? (
                   <TextInput
-                    value={String(value)}
+                    value={value}
                     placeholder={t(f.placeholderKey)}
                     mask={isSecret ? '*' : undefined}
-                    onChange={val => setFields(prev => ({ ...prev, [f.key]: val }))}
+                    onChange={val => onFieldChange(f.key, val)}
                     onSubmit={() => onFieldSubmit(i)}
                   />
                 ) : (
                   <Text dimColor>
                     {isSecret && value
-                      ? '●'.repeat(Math.min(String(value).length, 12))
+                      ? secretSummary
                       : value || t(f.placeholderKey)}
                   </Text>
+                )}
+                {isSecret && value && focused && (
+                  <Text dimColor>{t('secretPreview', { summary: secretSummary })}</Text>
+                )}
+                {isSecret && secretWhitespace && (
+                  <Text color="yellow">{t('secretWhitespaceHint')}</Text>
                 )}
               </Box>
             </Box>
           )
         })}
       </Box>
+
+      {feedback && (
+        <Box marginTop={1} paddingLeft={2}>
+          <Text color={feedbackTone === 'error' ? 'red' : 'yellow'} bold>{feedback}</Text>
+        </Box>
+      )}
 
       {/* ---- 操作按钮 ---- */}
       <Box marginTop={1} gap={3} paddingLeft={2}>

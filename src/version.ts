@@ -5,4 +5,4 @@
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 
-export const VERSION = '1.2.11'
+export const VERSION = '1.2.12'
